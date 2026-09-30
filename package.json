@@ -6,6 +6,7 @@
     "test": "pnpm run test:smoke && pnpm run test:packages",
     "test:smoke": "vitest run tests/domain-external-consumer-smoke.test.ts",
     "test:packages": "pnpm -r --filter \"./packages/*\" test",
+    "test:rls": "vitest run supabase/tests/rls.test.ts",
     "typecheck": "pnpm run typecheck:root && pnpm run typecheck:packages",
     "typecheck:root": "tsc --noEmit -p tsconfig.json",
     "typecheck:packages": "pnpm -r --filter \"./packages/*\" typecheck"
@@ -14,6 +15,8 @@
     "@finance/domain": "workspace:*"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "@types/node": "^26.6.3",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   }

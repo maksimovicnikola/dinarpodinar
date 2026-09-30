@@ -3,11 +3,12 @@
   "private": true,
   "packageManager": "pnpm@10.15.0",
   "scripts": {
-    "test": "pnpm run test:smoke && pnpm run test:packages",
+    "test": "pnpm run test:smoke && pnpm run test:month-key && pnpm run test:sql && pnpm run test:packages",
     "test:smoke": "vitest run tests/domain-external-consumer-smoke.test.ts",
     "test:packages": "pnpm -r --filter \"./packages/*\" test",
     "test:rls": "vitest run supabase/tests/rls.test.ts",
     "test:month-key": "vitest run supabase/tests/month-key.test.ts",
+    "test:sql": "vitest run supabase/tests/migration-invariants.test.ts",
     "typecheck": "pnpm run typecheck:root && pnpm run typecheck:packages",
     "typecheck:root": "tsc --noEmit -p tsconfig.json",
     "typecheck:packages": "pnpm -r --filter \"./packages/*\" typecheck"

@@ -1,5 +1,8 @@
 /**
- * Verifikacija logike month_key generated column.
+ * OGRANIČENJE: ovo je TypeScript replika `month_key` izraza, ne provera DDL-a.
+ * Testira se samo da je tražena semantika 'YYYY-MM' interno konzistentna; pravi
+ * generated column proverava integracioni test u `supabase/tests/rls.test.ts`
+ * (`expect(inserted.data?.month_key).toBe("2026-09")`). Ovaj fajl ne zamenjuje tu proveru.
  *
  * SQL izraz (migration 20260930120000_finance.sql):
  *   lpad(extract(year  from occurred_on)::int::text, 4, '0') || '-' ||

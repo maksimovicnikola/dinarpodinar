@@ -4,6 +4,12 @@
 -- ============================================================
 
 -- ------------------------------------------------------------
+-- SCHEMA USAGE (self-contained; Supabase may already grant these)
+-- ------------------------------------------------------------
+
+grant usage on schema public to anon, authenticated;
+
+-- ------------------------------------------------------------
 -- TABELE
 -- ------------------------------------------------------------
 
@@ -60,16 +66,23 @@ create table public.entries (
   person_id uuid not null references public.profiles (id),
   person_name text not null,
   occurred_on date not null,
-  month_key text generated always as (to_char(occurred_on, 'YYYY-MM')) stored,
+  -- Fix 1: substring(date::text, 1, 7) je IMMUTABLE (date::text → 'YYYY-MM-DD' ISO format).
+  -- to_char(date, text) je STABLE (locale-dependent), pa PostgreSQL odbija generated column.
+  month_key text generated always as (substring(occurred_on::text, 1, 7)) stored,
   note text not null default '',
   created_by uuid not null references public.profiles (id),
   recurring_rule_id uuid
 );
 
+-- Fix 2: ON DELETE SET NULL umesto NO ACTION.
+-- Household cascade briše i recurring_rules i entries, ali ako se pravilo obriše
+-- direktno, istorijski unosi ostaju sa recurring_rule_id = NULL.
 alter table public.entries
-  add constraint entries_rule_fk foreign key (recurring_rule_id) references public.recurring_rules (id);
+  add constraint entries_rule_fk
+  foreign key (recurring_rule_id) references public.recurring_rules (id)
+  on delete set null;
 
--- Jedan unos po pravilu po mesecu
+-- Jedan unos po pravilu po mesecu (partial — ne uključuje NULL)
 create unique index entries_one_rule_per_month
   on public.entries (recurring_rule_id, month_key)
   where recurring_rule_id is not null;
@@ -91,7 +104,7 @@ create table public.sent_notifications (
 );
 
 -- ------------------------------------------------------------
--- POMOĆNE RPC FUNKCIJE
+-- POMOĆNE RPC FUNKCIJE (security definer; revoke public later)
 -- ------------------------------------------------------------
 
 create or replace function public.is_member(hid uuid)
@@ -166,6 +179,10 @@ create trigger households_currency
 
 -- ------------------------------------------------------------
 -- OKIDAČI — ČLANSTVA
+-- Fix 2: Dozvoli CASCADE DELETE kad domaćinstvo se briše (household
+-- red neće biti vidljiv u istoj transakciji u trenutku cascade-a).
+-- Ovo sprečava blokiranje legitimnog household ON DELETE CASCADE.
+-- Invarianta: postojeće domaćinstvo ne može ostati bez vlasnika.
 -- ------------------------------------------------------------
 
 create or replace function public.prevent_owner_removal()
@@ -174,6 +191,11 @@ language plpgsql
 as $$
 begin
   if old.role = 'owner' then
+    -- Ako domaćinstvo više ne postoji (CASCADE DELETE od household),
+    -- brisanje vlasničkog članstva je legitimno.
+    if not exists (select 1 from public.households where id = old.household_id) then
+      return old;
+    end if;
     raise exception 'Vlasnik se ne uklanja';
   end if;
   return old;
@@ -223,8 +245,8 @@ create trigger recurring_rules_prepare
 -- ------------------------------------------------------------
 -- OKIDAČI — UNOSI
 -- Validira: kategorija, osoba, recurring_rule_id.
--- Postavlja: person_name, created_by.
--- Napomena o created_by:
+-- Postavlja: person_name (uvek), created_by (samo auth INSERT).
+-- created_by pravila:
 --   - Autentifikovani INSERT → uvek auth.uid()
 --   - Service-role INSERT (auth.uid() = null) → čuva eksplicitno zadati created_by
 -- ------------------------------------------------------------
@@ -258,7 +280,7 @@ begin
     raise exception 'Osoba nije član domaćinstva';
   end if;
 
-  -- Validacija ponavljajućeg pravila
+  -- Validacija ponavljajućeg pravila (household + kind kompatibilnost)
   if new.recurring_rule_id is not null then
     if not exists (
       select 1 from public.recurring_rules
@@ -273,11 +295,10 @@ begin
   -- Postavljanje person_name
   select display_name into new.person_name from public.profiles where id = new.person_id;
 
-  -- Postavljanje created_by
+  -- Postavljanje created_by samo za auth INSERT (ne briše service-role vrednost)
   if tg_op = 'INSERT' and auth.uid() is not null then
     new.created_by := auth.uid();
   end if;
-  -- Napomena: ako je auth.uid() null (service-role), created_by ostaje onakav kakav je prosleđen
 
   return new;
 end;
@@ -288,8 +309,10 @@ create trigger entries_prepare
   for each row execute function public.prepare_entry();
 
 -- Okidač koji sprečava člana da menja ili briše unos.
--- USING klauzula entries_update/entries_delete politike je is_member
--- kako bi ovaj okidač sigurno okinuo i vratio grešku.
+-- Fix 5: Preskače proveru za service-role (auth.uid() IS NULL) —
+-- jobovi/maintenance smeju menjati unose direktno.
+-- USING klauzula entries_update/entries_delete je is_member (ne is_owner)
+-- kako bi okidač sigurno okinuo i vratio grešku za authenticated korisnike.
 create or replace function public.reject_member_entry_change()
 returns trigger
 language plpgsql
@@ -297,12 +320,16 @@ security definer
 set search_path = public
 as $$
 begin
+  -- Service-role (auth.uid() IS NULL): dozvoli bez provere
+  if auth.uid() is null then
+    if tg_op = 'DELETE' then return old; end if;
+    return new;
+  end if;
+
   if not public.is_owner(old.household_id) then
     raise exception 'Samo vlasnik menja unos';
   end if;
-  if tg_op = 'DELETE' then
-    return old;
-  end if;
+  if tg_op = 'DELETE' then return old; end if;
   return new;
 end;
 $$;
@@ -329,19 +356,24 @@ begin
   end if;
   insert into public.households (name, currency) values (p_name, p_currency) returning id into hid;
   insert into public.memberships (household_id, user_id, role) values (hid, auth.uid(), 'owner');
-  -- Podrazumevane kategorije na srpskom
+  -- Podrazumevane kategorije na srpskom (tačni stringovi iz specifikacije)
   insert into public.categories (household_id, name, kind) values
-    (hid, 'Hrana',   'expense'),
-    (hid, 'Računi',  'expense'),
-    (hid, 'Prevoz',  'expense'),
-    (hid, 'Zdravlje','expense'),
-    (hid, 'Ostalo',  'expense'),
-    (hid, 'Plata',   'income'),
-    (hid, 'Ostalo',  'income');
+    (hid, 'Hrana',    'expense'),
+    (hid, 'Računi',   'expense'),
+    (hid, 'Prevoz',   'expense'),
+    (hid, 'Zdravlje', 'expense'),
+    (hid, 'Ostalo',   'expense'),
+    (hid, 'Plata',    'income'),
+    (hid, 'Ostalo',   'income');
   return hid;
 end;
 $$;
 
+-- Fix 3 + Fix 4: NULL-safe email check + FOR UPDATE row lock (atomic claim).
+-- FOR UPDATE serializes concurrent acceptances: drugi pozivalac čeka na commit
+-- prvog, pa vidi used_at != NULL i dobija grešku.
+-- Fix 3: Ako korisnik nema e-poštu (NULL), SQL NULL <> X evaluira u NULL (ne TRUE),
+-- što bi zaobišlo proveru. Eksplicitno odbijamo NULL e-poštu.
 create or replace function public.accept_invitation(p_token uuid)
 returns uuid
 language plpgsql
@@ -355,8 +387,20 @@ begin
   if auth.uid() is null then
     raise exception 'Prijava je obavezna';
   end if;
+
   select email into caller_email from auth.users where id = auth.uid();
-  select * into invite from public.invitations where token = p_token;
+
+  -- Fix 3: Eksplicitno odbaci NULL e-poštu (korisnik bez e-pošte ne sme prihvatiti)
+  if caller_email is null then
+    raise exception 'Korisnik nema e-poštu registrovanu na nalogu';
+  end if;
+
+  -- Fix 4: FOR UPDATE zaključava red pre provere → serializuje konkurentne pozive
+  select * into invite
+  from public.invitations
+  where token = p_token
+  for update;
+
   if invite.id is null then
     raise exception 'Pozivnica ne postoji';
   end if;
@@ -366,13 +410,17 @@ begin
   if invite.expires_at < now() then
     raise exception 'Pozivnica je istekla';
   end if;
-  if lower(invite.email) <> lower(caller_email) then
+  -- Fix 3: IS DISTINCT FROM je NULL-safe (NULL IS DISTINCT FROM 'x' → TRUE)
+  if lower(invite.email) is distinct from lower(caller_email) then
     raise exception 'Pozivnica je za drugu e-poštu';
   end if;
+
   insert into public.memberships (household_id, user_id, role)
   values (invite.household_id, auth.uid(), 'member')
   on conflict do nothing;
+
   update public.invitations set used_at = now() where id = invite.id;
+
   return invite.household_id;
 end;
 $$;
@@ -419,9 +467,9 @@ create policy categories_write on public.categories for all    to authenticated
 
 -- Unosi:
 -- INSERT: svi članovi mogu dodavati
--- UPDATE/DELETE: USING je is_member (da okidač reject_member_entry_change okinuti i vrati grešku),
---   WITH CHECK/USING za vlasnika garantuje okidač. Ovo je namerni dizajn —
---   PostgREST bez matching row-a vraća 0 redova bez greške, pa okidač mora okinuti.
+-- UPDATE USING = is_member: okidač reject_member_entry_change mora okinuti i
+--   dati grešku (PostgREST sa is_owner USING vraća 0 redova bez greške — tiha zabrana)
+-- WITH CHECK = is_owner: odbija commit čak i ako okidač ne baci izuzetak (defense-in-depth)
 create policy entries_read   on public.entries for select to authenticated using (public.is_member(household_id));
 create policy entries_insert on public.entries for insert to authenticated with check (public.is_member(household_id));
 create policy entries_update on public.entries for update to authenticated
@@ -441,14 +489,46 @@ create policy rules_delete on public.recurring_rules for delete to authenticated
 create policy invitations_read   on public.invitations for select to authenticated using (public.is_owner(household_id));
 create policy invitations_insert on public.invitations for insert to authenticated with check (public.is_owner(household_id));
 
--- Notifikacije (samo čitanje za članove)
+-- Notifikacije (samo čitanje za članove; INSERT samo service-role)
 create policy notifications_read on public.sent_notifications for select to authenticated using (public.is_member(household_id));
 
 -- ------------------------------------------------------------
--- GRANTS
+-- TABLE-LEVEL GRANTS
+-- RLS kontroliše pristup redovima; table grant kontroliše pristup tabeli.
 -- ------------------------------------------------------------
 
-grant execute on function public.create_household(text, text) to authenticated;
-grant execute on function public.accept_invitation(uuid) to authenticated;
-grant execute on function public.is_member(uuid) to authenticated;
-grant execute on function public.is_owner(uuid) to authenticated;
+grant select, insert, update, delete on public.profiles           to authenticated;
+grant select, insert, update, delete on public.households         to authenticated;
+grant select, insert, update, delete on public.memberships        to authenticated;
+grant select, insert, update, delete on public.categories         to authenticated;
+grant select, insert, update, delete on public.entries            to authenticated;
+grant select, insert, update, delete on public.recurring_rules    to authenticated;
+grant select, insert, update, delete on public.invitations        to authenticated;
+grant select                         on public.sent_notifications to authenticated;
+-- sent_notifications INSERT/UPDATE/DELETE samo service_role (Edge Functions/jobs)
+
+-- ------------------------------------------------------------
+-- FUNCTION GRANTS — REVOKE PUBLIC, GRANT PO ULOZI
+-- Sve security definer funkcije su podrazumevano dostupne PUBLIC-u;
+-- eksplicitno revokujemo i dajemo samo potrebnim ulogama.
+-- ------------------------------------------------------------
+
+-- Trigger funkcije (pozivaju ih trigeri, ne korisnici direktno)
+revoke execute on function public.handle_new_user()               from public;
+revoke execute on function public.prevent_currency_change()       from public;
+revoke execute on function public.prevent_owner_removal()         from public;
+revoke execute on function public.prepare_entry()                 from public;
+revoke execute on function public.prepare_recurring_rule()        from public;
+revoke execute on function public.reject_member_entry_change()    from public;
+
+-- Helperi koji se koriste u RLS politikama — authenticated mora moći zvati
+revoke execute on function public.is_member(uuid)                 from public;
+revoke execute on function public.is_owner(uuid)                  from public;
+grant  execute on function public.is_member(uuid)                 to authenticated;
+grant  execute on function public.is_owner(uuid)                  to authenticated;
+
+-- Javne RPC funkcije
+revoke execute on function public.create_household(text, text)    from public;
+revoke execute on function public.accept_invitation(uuid)         from public;
+grant  execute on function public.create_household(text, text)    to authenticated;
+grant  execute on function public.accept_invitation(uuid)         to authenticated;

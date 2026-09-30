@@ -281,15 +281,5 @@ it("pravilo sa kategorijom iz drugog domaćinstva se odbija", async () => {
   expect(error!.message).toMatch(/domaćinstvu|kategorija/i);
 });
 
-// ----------------------------------------------------------------
-// month_key: substring(date::text, 1, 7) semantika — 'YYYY-MM'
-// (smoke test koji se može potvrditi bez pokrenutog Supabase-a;
-//  kad DB radi, proverava da generated column ima tačan format)
-// ----------------------------------------------------------------
-it("month_key ima format YYYY-MM", async () => {
-  // Ova provera je smoke-only bez DB-a (TypeScript tipovi prolaze).
-  // Kad Supabase bude aktivan, insert + select verifikuje generated column.
-  const testDate = new Date("2026-09-30");
-  const iso = testDate.toISOString().split("T")[0]; // "2026-09-30"
-  expect(iso.substring(0, 7)).toBe("2026-09");
-});
+// month_key logika testirana u: supabase/tests/month-key.test.ts
+// (odvojen fajl — ne zavisi od Supabase veze, uvek se može pokrenuti)

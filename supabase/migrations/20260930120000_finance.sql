@@ -66,9 +66,15 @@ create table public.entries (
   person_id uuid not null references public.profiles (id),
   person_name text not null,
   occurred_on date not null,
-  -- Fix 1: substring(date::text, 1, 7) je IMMUTABLE (date::text → 'YYYY-MM-DD' ISO format).
-  -- to_char(date, text) je STABLE (locale-dependent), pa PostgreSQL odbija generated column.
-  month_key text generated always as (substring(occurred_on::text, 1, 7)) stored,
+  -- Fix 1 (round 2): Genuino IMMUTABLE izraz bez zavisnosti od DateStyle/locale/sesije.
+  -- date::text prati session DateStyle (npr. German/US menja format) → nije sigurno.
+  -- extract(year|month from date) je IMMUTABLE u PostgreSQL katalogu i uvek vraća
+  -- numeričku vrednost nezavisnu od sesije. lpad + || su takođe IMMUTABLE.
+  -- Rezultat je uvek tačno 'YYYY-MM' (npr. '2026-09').
+  month_key text generated always as (
+    lpad(extract(year  from occurred_on)::int::text, 4, '0') || '-' ||
+    lpad(extract(month from occurred_on)::int::text, 2, '0')
+  ) stored,
   note text not null default '',
   created_by uuid not null references public.profiles (id),
   recurring_rule_id uuid

@@ -112,6 +112,16 @@ describe("suggest", () => {
     expect(sentence).toBe("Hrana je na 80% limita. Najveći deo: Marko.");
   });
 
+  it("tačno 100% je i dalje blizina", () => {
+    const sentence = suggest({
+      currency: "RSD",
+      categories: [food],
+      current: [expense({ id: "1", categoryId: "food", amountMinor: 1_000_000 })],
+      previous: null,
+    }).sentence;
+    expect(sentence).toBe("Hrana je na 100% limita. Najveći deo: Marko.");
+  });
+
   it("rast ulazi samo preko oba praga", () => {
     const grown = suggest({
       currency: "RSD",
@@ -138,6 +148,28 @@ describe("suggest", () => {
       previous: [expense({ id: "p", categoryId: "bills", amountMinor: 500_000 })],
     }).sentence;
     expect(tooSmall).toBe("Ovaj mesec je unutar limita.");
+  });
+
+  it("rast ispod 10% ostaje miran", () => {
+    const sentence = suggest({
+      currency: "RSD",
+      categories: [bills],
+      current: [expense({ id: "1", categoryId: "bills", amountMinor: 1_099_999 })],
+      previous: [expense({ id: "p", categoryId: "bills", amountMinor: 1_000_000 })],
+    }).sentence;
+    expect(sentence).toBe("Ovaj mesec je unutar limita.");
+  });
+
+  it("rast na tačno 10% i tačnom apsolutnom pragu prolazi", () => {
+    const sentence = suggest({
+      currency: "RSD",
+      categories: [bills],
+      current: [expense({ id: "1", categoryId: "bills", amountMinor: 1_100_000 })],
+      previous: [expense({ id: "p", categoryId: "bills", amountMinor: 1_000_000 })],
+    }).sentence;
+    expect(sentence).toBe(
+      "Potrošnja u kategoriji Računi je veća za 1.000 RSD nego prošlog meseca. Najveći deo: Marko.",
+    );
   });
 
   it("EUR prag je 10 evra", () => {
@@ -254,6 +286,26 @@ describe("suggest", () => {
       personId: "ana",
       personName: "Ana",
       current: [expense({ id: "1", categoryId: "food", amountMinor: 100_000 })],
+      previous: null,
+    }).sentence;
+    expect(sentence).toBe("Ana nema troškove u ovom mesecu.");
+  });
+
+  it("filter osobe ignoriše trošak bez poznate expense kategorije", () => {
+    const sentence = suggest({
+      currency: "RSD",
+      categories: [food],
+      personId: "ana",
+      personName: "Ana",
+      current: [
+        expense({
+          id: "1",
+          categoryId: "unknown",
+          amountMinor: 200_000,
+          personId: "ana",
+          personName: "Ana",
+        }),
+      ],
       previous: null,
     }).sentence;
     expect(sentence).toBe("Ana nema troškove u ovom mesecu.");

@@ -77,10 +77,16 @@ export function suggest(input: {
   personName?: string;
 }): Suggestion {
   if (input.personId) {
-    const own = input.current.filter(
+    const knownExpenseCategoryIds = new Set(
+      input.categories
+        .filter((category) => category.kind === "expense")
+        .map((category) => category.id),
+    );
+    const ownExpenses = input.current.filter(
       (entry) => entry.kind === "expense" && entry.personId === input.personId,
     );
-    const name = input.personName ?? own[0]?.personName ?? input.personId;
+    const own = ownExpenses.filter((entry) => knownExpenseCategoryIds.has(entry.categoryId));
+    const name = input.personName ?? ownExpenses[0]?.personName ?? input.personId;
     if (own.length === 0) {
       return { sentence: `${name} nema troškove u ovom mesecu.` };
     }
@@ -134,8 +140,7 @@ export function suggest(input: {
   }
 
   const near = rows.filter((row) => {
-    const thresholds = limitThresholds(row.spentMinor, row.category.limitMinor);
-    return thresholds.includes(80) && !thresholds.includes(100);
+    return limitThresholds(row.spentMinor, row.category.limitMinor).includes(80);
   });
   if (near.length > 0) {
     const winner = pick(near, (row) => row.spentMinor / (row.category.limitMinor ?? 1));

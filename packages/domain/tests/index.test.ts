@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import {
   addCalendarDays,
+  assertDayOfMonth,
   assertRemindDays,
   clampDayOfMonth,
   formatMoney,
@@ -27,6 +28,7 @@ it("izvozi pravila koja klijenti dele preko @finance/domain", () => {
   expect(addCalendarDays("2026-03-31", -1)).toBe("2026-03-30");
   expect(monthKey("2026-09-30")).toBe("2026-09");
   expect(todayInBelgrade(new Date("2026-03-31T22:30:00.000Z"))).toBe("2026-04-01");
+  expect(() => assertDayOfMonth(31)).not.toThrow();
   expect(() => assertRemindDays(1)).not.toThrow();
 
   expect(growthFloorMinor("RSD")).toBe(100_000);

@@ -3,6 +3,18 @@
   "private": true,
   "packageManager": "pnpm@10.15.0",
   "scripts": {
-    "test": "pnpm -r test"
+    "test": "pnpm run test:smoke && pnpm run test:packages",
+    "test:smoke": "vitest run tests/domain-external-consumer-smoke.test.ts",
+    "test:packages": "pnpm -r --filter \"./packages/*\" test",
+    "typecheck": "pnpm run typecheck:root && pnpm run typecheck:packages",
+    "typecheck:root": "tsc --noEmit -p tsconfig.json",
+    "typecheck:packages": "pnpm -r --filter \"./packages/*\" typecheck"
+  },
+  "dependencies": {
+    "@finance/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
   }
 }

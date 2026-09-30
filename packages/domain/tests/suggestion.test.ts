@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { growthFloorMinor, limitThresholds, suggest } from "../src/suggestion";
 import type { CategorySnapshot, EntrySnapshot } from "../src/types";
 
@@ -19,6 +19,12 @@ const bills: CategorySnapshot = {
   name: "Računi",
   kind: "expense",
   limitMinor: null,
+};
+const zeroLimit: CategorySnapshot = {
+  id: "zero",
+  name: "Nulti limit",
+  kind: "expense",
+  limitMinor: 0,
 };
 const pay: CategorySnapshot = {
   id: "pay",
@@ -65,6 +71,28 @@ describe("growthFloorMinor", () => {
 });
 
 describe("suggest", () => {
+  it("personName je obavezan kad postoji personId (tip)", () => {
+    // @ts-expect-error personName je obavezan kada je personId prosleđen
+    const _invalidInput: Parameters<typeof suggest>[0] = {
+      currency: "RSD",
+      categories: [food],
+      personId: "ana",
+      current: [],
+      previous: null,
+    };
+    void _invalidInput;
+
+    const validInput: Parameters<typeof suggest>[0] = {
+      currency: "RSD",
+      categories: [food],
+      personId: "ana",
+      personName: "Ana",
+      current: [],
+      previous: null,
+    };
+    expect(suggest(validInput).sentence).toBe("Ana nema troškove u ovom mesecu.");
+  });
+
   it("prekoračenje pobeđuje blizinu i rast", () => {
     const sentence = suggest({
       currency: "RSD",
@@ -120,6 +148,26 @@ describe("suggest", () => {
       previous: null,
     }).sentence;
     expect(sentence).toBe("Hrana je na 100% limita. Najveći deo: Marko.");
+  });
+
+  it("na 99,5% ostaje 99, nikad 100", () => {
+    const sentence = suggest({
+      currency: "RSD",
+      categories: [food],
+      current: [expense({ id: "1", categoryId: "food", amountMinor: 995_000 })],
+      previous: null,
+    }).sentence;
+    expect(sentence).toBe("Hrana je na 99% limita. Najveći deo: Marko.");
+  });
+
+  it("nulti limit ne pravi uzbunu", () => {
+    const sentence = suggest({
+      currency: "RSD",
+      categories: [zeroLimit],
+      current: [expense({ id: "1", categoryId: "zero", amountMinor: 150_000 })],
+      previous: null,
+    }).sentence;
+    expect(sentence).toBe("Ovaj mesec je unutar limita.");
   });
 
   it("rast ulazi samo preko oba praga", () => {
@@ -264,6 +312,7 @@ describe("suggest", () => {
       currency: "RSD",
       categories: [food, transport],
       personId: "marko",
+      personName: "Marko",
       current: [
         expense({ id: "1", categoryId: "food", amountMinor: 1_240_000 }),
         expense({
@@ -309,5 +358,52 @@ describe("suggest", () => {
       previous: null,
     }).sentence;
     expect(sentence).toBe("Ana nema troškove u ovom mesecu.");
+  });
+
+  it("sr sortiranje baca jasnu grešku kada Intl nema podršku", () => {
+    const alpha: CategorySnapshot = {
+      id: "a",
+      name: "Hrana",
+      kind: "expense",
+      limitMinor: 100_000,
+    };
+    const beta: CategorySnapshot = {
+      id: "b",
+      name: "Prevoz",
+      kind: "expense",
+      limitMinor: 100_000,
+    };
+    const spy = vi.spyOn(Intl.Collator, "supportedLocalesOf").mockReturnValue([]);
+    try {
+      expect(() =>
+        suggest({
+          currency: "RSD",
+          categories: [beta, alpha],
+          current: [
+            expense({ id: "1", categoryId: "a", amountMinor: 150_000 }),
+            expense({ id: "2", categoryId: "b", amountMinor: 150_000 }),
+          ],
+          previous: null,
+        }),
+      ).toThrow(/srpsko sortiranje/);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("sr guard je lenj i ne aktivira se bez sortiranja", () => {
+    const spy = vi.spyOn(Intl.Collator, "supportedLocalesOf").mockReturnValue([]);
+    try {
+      expect(
+        suggest({
+          currency: "RSD",
+          categories: [],
+          current: [],
+          previous: null,
+        }).sentence,
+      ).toBe("Ovaj mesec je unutar limita.");
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

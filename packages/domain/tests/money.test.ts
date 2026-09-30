@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { assertPositiveMinor, formatMoney } from "../src/money";
 
 describe("formatMoney", () => {
@@ -12,6 +12,21 @@ describe("formatMoney", () => {
 
   it("piše negativan ostatak", () => {
     expect(formatMoney(-150, "RSD")).toBe("-1,50 RSD");
+  });
+
+  it("grupisanje hiljada je deterministično i bez locale zavisnosti", () => {
+    const spy = vi.spyOn(Intl, "NumberFormat").mockImplementation(
+      () =>
+        ({
+          format: () => "4,200",
+        }) as unknown as Intl.NumberFormat,
+    );
+    try {
+      expect(formatMoney(420000, "RSD")).toBe("4.200 RSD");
+      expect(formatMoney(12345678900, "RSD")).toBe("123.456.789 RSD");
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

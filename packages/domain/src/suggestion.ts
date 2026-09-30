@@ -2,6 +2,21 @@ import { formatMoney } from "./money";
 import type { CategorySnapshot, EntrySnapshot } from "./types";
 
 export type Suggestion = { sentence: string };
+type SuggestInputBase = {
+  currency: string;
+  categories: CategorySnapshot[];
+  current: EntrySnapshot[];
+  previous: EntrySnapshot[] | null;
+};
+type SuggestInput =
+  | (SuggestInputBase & {
+      personId: string;
+      personName: string;
+    })
+  | (SuggestInputBase & {
+      personId?: undefined;
+      personName?: undefined;
+    });
 
 export function growthFloorMinor(currency: string): number {
   return currency === "RSD" ? 100_000 : 1_000;
@@ -28,7 +43,20 @@ type Rollup = {
 };
 
 function compareSr(a: string, b: string): number {
-  return a.localeCompare(b, "sr");
+  if (typeof Intl === "undefined" || typeof Intl.Collator !== "function") {
+    throw new Error("Okruženje mora podržavati srpsko sortiranje (Intl.Collator, locale sr).");
+  }
+  if (typeof Intl.Collator.supportedLocalesOf !== "function") {
+    throw new Error("Okruženje mora podržavati srpsko sortiranje (Intl.Collator.supportedLocalesOf).");
+  }
+  if (Intl.Collator.supportedLocalesOf("sr").length === 0) {
+    throw new Error("Okruženje mora podržavati srpsko sortiranje (locale sr).");
+  }
+  const collator = new Intl.Collator("sr");
+  if (!collator.resolvedOptions().locale.toLowerCase().startsWith("sr")) {
+    throw new Error("Okruženje mora imati srpsko sortiranje kao aktivan locale (sr).");
+  }
+  return collator.compare(a, b);
 }
 
 function expenseEntries(entries: EntrySnapshot[], categoryId: string): EntrySnapshot[] {
@@ -51,32 +79,44 @@ function rollupPeople(entries: EntrySnapshot[]): PersonRollup[] {
   return [...map.values()];
 }
 
+function firstOrThrow<T>(values: T[], message: string): T {
+  const value = values[0];
+  if (value == null) {
+    throw new Error(message);
+  }
+  return value;
+}
+
 function topPerson(people: PersonRollup[]): PersonRollup {
-  return [...people].sort((a, b) => {
-    if (a.amountMinor !== b.amountMinor) return b.amountMinor - a.amountMinor;
-    if (a.entryCount !== b.entryCount) return b.entryCount - a.entryCount;
-    return compareSr(a.name, b.name);
-  })[0];
+  return firstOrThrow(
+    [...people].sort((a, b) => {
+      if (a.amountMinor !== b.amountMinor) return b.amountMinor - a.amountMinor;
+      if (a.entryCount !== b.entryCount) return b.entryCount - a.entryCount;
+      return compareSr(a.name, b.name);
+    }),
+    "Nije moguće odrediti osobu sa najvećim troškom.",
+  );
 }
 
 function pick(rows: Rollup[], score: (row: Rollup) => number): Rollup {
-  return [...rows].sort((a, b) => {
-    const delta = score(b) - score(a);
-    if (delta !== 0) return delta;
-    if (a.spentMinor !== b.spentMinor) return b.spentMinor - a.spentMinor;
-    return compareSr(a.category.name, b.category.name);
-  })[0];
+  return firstOrThrow(
+    [...rows].sort((a, b) => {
+      const delta = score(b) - score(a);
+      if (delta !== 0) return delta;
+      if (a.spentMinor !== b.spentMinor) return b.spentMinor - a.spentMinor;
+      return compareSr(a.category.name, b.category.name);
+    }),
+    "Nije moguće odrediti vodeću kategoriju.",
+  );
 }
 
-export function suggest(input: {
-  currency: string;
-  categories: CategorySnapshot[];
-  current: EntrySnapshot[];
-  previous: EntrySnapshot[] | null;
-  personId?: string;
-  personName?: string;
-}): Suggestion {
-  if (input.personId) {
+function positiveLimit(limitMinor: number | null): number | null {
+  if (limitMinor == null || limitMinor <= 0) return null;
+  return limitMinor;
+}
+
+export function suggest(input: SuggestInput): Suggestion {
+  if (input.personId !== undefined) {
     const knownExpenseCategoryIds = new Set(
       input.categories
         .filter((category) => category.kind === "expense")
@@ -86,7 +126,7 @@ export function suggest(input: {
       (entry) => entry.kind === "expense" && entry.personId === input.personId,
     );
     const own = ownExpenses.filter((entry) => knownExpenseCategoryIds.has(entry.categoryId));
-    const name = input.personName ?? ownExpenses[0]?.personName ?? input.personId;
+    const name = input.personName;
     if (own.length === 0) {
       return { sentence: `${name} nema troškove u ovom mesecu.` };
     }
@@ -99,13 +139,16 @@ export function suggest(input: {
       }))
       .filter((row) => row.entries.length > 0);
 
-    const winner = [...byCategory].sort((a, b) => {
-      const aSum = a.entries.reduce((sum, entry) => sum + entry.amountMinor, 0);
-      const bSum = b.entries.reduce((sum, entry) => sum + entry.amountMinor, 0);
-      if (aSum !== bSum) return bSum - aSum;
-      if (a.entries.length !== b.entries.length) return b.entries.length - a.entries.length;
-      return compareSr(a.category.name, b.category.name);
-    })[0];
+    const winner = firstOrThrow(
+      [...byCategory].sort((a, b) => {
+        const aSum = a.entries.reduce((sum, entry) => sum + entry.amountMinor, 0);
+        const bSum = b.entries.reduce((sum, entry) => sum + entry.amountMinor, 0);
+        if (aSum !== bSum) return bSum - aSum;
+        if (a.entries.length !== b.entries.length) return b.entries.length - a.entries.length;
+        return compareSr(a.category.name, b.category.name);
+      }),
+      "Nije moguće odrediti kategoriju za izabranu osobu.",
+    );
 
     const sum = winner.entries.reduce((total, entry) => total + entry.amountMinor, 0);
     return {
@@ -127,25 +170,29 @@ export function suggest(input: {
     })
     .filter((row) => row.spentMinor > 0);
 
-  const over = rows.filter(
-    (row) => row.category.limitMinor != null && row.spentMinor > row.category.limitMinor,
-  );
+  const over = rows.filter((row) => {
+    const limitMinor = positiveLimit(row.category.limitMinor);
+    return limitMinor != null && row.spentMinor > limitMinor;
+  });
   if (over.length > 0) {
-    const winner = pick(over, (row) => row.spentMinor - (row.category.limitMinor ?? 0));
+    const winner = pick(over, (row) => row.spentMinor - (positiveLimit(row.category.limitMinor) ?? 0));
     const person = topPerson(winner.people);
-    const overMinor = winner.spentMinor - (winner.category.limitMinor ?? 0);
+    const limitMinor = positiveLimit(winner.category.limitMinor) ?? 0;
+    const overMinor = winner.spentMinor - limitMinor;
     return {
       sentence: `${winner.category.name} je ${formatMoney(overMinor, input.currency)} preko limita. Najveći deo: ${person.name}.`,
     };
   }
 
   const near = rows.filter((row) => {
-    return limitThresholds(row.spentMinor, row.category.limitMinor).includes(80);
+    const limitMinor = positiveLimit(row.category.limitMinor);
+    return limitMinor != null && limitThresholds(row.spentMinor, limitMinor).includes(80);
   });
   if (near.length > 0) {
-    const winner = pick(near, (row) => row.spentMinor / (row.category.limitMinor ?? 1));
+    const winner = pick(near, (row) => row.spentMinor / (positiveLimit(row.category.limitMinor) ?? 1));
     const person = topPerson(winner.people);
-    const percent = Math.round((winner.spentMinor * 100) / (winner.category.limitMinor ?? 1));
+    const limitMinor = positiveLimit(winner.category.limitMinor) ?? 1;
+    const percent = Math.floor((winner.spentMinor * 100) / limitMinor);
     return {
       sentence: `${winner.category.name} je na ${percent}% limita. Najveći deo: ${person.name}.`,
     };

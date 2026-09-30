@@ -285,52 +285,70 @@ it("pravilo sa kategorijom iz drugog domaćinstva se odbija", async () => {
 // Arhiva i jedan unos po pravilu (Task 2)
 // ----------------------------------------------------------------
 it("arhiva odbija novi unos, a isto pravilo u istom mesecu ostaje jedno", async () => {
+  // Guard 1: shared state — householdId mora biti popunjen od prvog testa
+  expect(householdId).toBeTruthy();
+
   const owner = client(ownerToken);
   const food = await owner.from("categories").select("id").eq("household_id", householdId).eq("name", "Hrana").single();
-  const archived = await owner.from("categories").update({ archived: true }).eq("id", food.data?.id);
+  // Guard 2: lookup kategorije mora uspeti pre testiranja arhive
+  expect(food.error).toBeNull();
+  expect(food.data).not.toBeNull();
+  expect(food.data!.id).toBeTruthy();
+
+  const archived = await owner.from("categories").update({ archived: true }).eq("id", food.data!.id);
   expect(archived.error).toBeNull();
 
   const member = client(memberToken);
   const me = await member.auth.getUser();
+  // Guard 3: auth mora uspeti i korisnik mora imati id
+  expect(me.error).toBeNull();
+  expect(me.data.user).not.toBeNull();
+  expect(me.data.user!.id).toBeTruthy();
+
   const rejected = await member.from("entries").insert({
     household_id: householdId,
     kind: "expense",
     amount_minor: 100,
-    category_id: food.data?.id,
-    person_id: me.data.user?.id,
+    category_id: food.data!.id,
+    person_id: me.data.user!.id,
     occurred_on: "2026-09-30",
   });
   expect(rejected.error).not.toBeNull();
 
-  await owner.from("categories").update({ archived: false }).eq("id", food.data?.id);
+  // Guard 4: razarhiviranje mora uspeti pre nego što kreiramo pravilo
+  const unarchived = await owner.from("categories").update({ archived: false }).eq("id", food.data!.id);
+  expect(unarchived.error).toBeNull();
+
   const rule = await member.from("recurring_rules").insert({
     household_id: householdId,
     kind: "expense",
     amount_minor: 50000,
-    category_id: food.data?.id,
-    person_id: me.data.user?.id,
+    category_id: food.data!.id,
+    person_id: me.data.user!.id,
     day_of_month: 31,
     remind_days: 1,
   }).select("id").single();
   expect(rule.error).toBeNull();
+  expect(rule.data).not.toBeNull();
+  expect(rule.data!.id).toBeTruthy();
 
   const first = await member.from("entries").insert({
     household_id: householdId,
     kind: "expense",
     amount_minor: 50000,
-    category_id: food.data?.id,
-    person_id: me.data.user?.id,
+    category_id: food.data!.id,
+    person_id: me.data.user!.id,
     occurred_on: "2026-02-28",
-    recurring_rule_id: rule.data?.id,
+    recurring_rule_id: rule.data!.id,
   });
   const second = await member.from("entries").insert({
     household_id: householdId,
     kind: "expense",
     amount_minor: 50000,
-    category_id: food.data?.id,
-    person_id: me.data.user?.id,
+    category_id: food.data!.id,
+    person_id: me.data.user!.id,
     occurred_on: "2026-02-28",
-    recurring_rule_id: rule.data?.id,
+    recurring_rule_id: rule.data!.id,
   });
   expect(first.error).toBeNull();
   expect(second.error).not.toBeNull();

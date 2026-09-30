@@ -1,0 +1,28 @@
+import { describe, expect, it } from "vitest";
+import { assertPositiveMinor, formatMoney } from "../src/money";
+
+describe("formatMoney", () => {
+  it("piše cele dinare bez decimala", () => {
+    expect(formatMoney(420000, "RSD")).toBe("4.200 RSD");
+  });
+
+  it("piše pare sa zarezom", () => {
+    expect(formatMoney(420050, "RSD")).toBe("4.200,50 RSD");
+  });
+
+  it("piše negativan ostatak", () => {
+    expect(formatMoney(-150, "RSD")).toBe("-1,50 RSD");
+  });
+});
+
+describe("assertPositiveMinor", () => {
+  it("odbija nulu, minus i decimale", () => {
+    expect(() => assertPositiveMinor(0)).toThrow(/pozitivan/);
+    expect(() => assertPositiveMinor(-1)).toThrow(/pozitivan/);
+    expect(() => assertPositiveMinor(1.5)).toThrow(/pozitivan/);
+  });
+
+  it("prima pozitivan ceo broj", () => {
+    expect(() => assertPositiveMinor(1)).not.toThrow();
+  });
+});

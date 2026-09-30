@@ -281,5 +281,60 @@ it("pravilo sa kategorijom iz drugog domaćinstva se odbija", async () => {
   expect(error!.message).toMatch(/domaćinstvu|kategorija/i);
 });
 
+// ----------------------------------------------------------------
+// Arhiva i jedan unos po pravilu (Task 2)
+// ----------------------------------------------------------------
+it("arhiva odbija novi unos, a isto pravilo u istom mesecu ostaje jedno", async () => {
+  const owner = client(ownerToken);
+  const food = await owner.from("categories").select("id").eq("household_id", householdId).eq("name", "Hrana").single();
+  const archived = await owner.from("categories").update({ archived: true }).eq("id", food.data?.id);
+  expect(archived.error).toBeNull();
+
+  const member = client(memberToken);
+  const me = await member.auth.getUser();
+  const rejected = await member.from("entries").insert({
+    household_id: householdId,
+    kind: "expense",
+    amount_minor: 100,
+    category_id: food.data?.id,
+    person_id: me.data.user?.id,
+    occurred_on: "2026-09-30",
+  });
+  expect(rejected.error).not.toBeNull();
+
+  await owner.from("categories").update({ archived: false }).eq("id", food.data?.id);
+  const rule = await member.from("recurring_rules").insert({
+    household_id: householdId,
+    kind: "expense",
+    amount_minor: 50000,
+    category_id: food.data?.id,
+    person_id: me.data.user?.id,
+    day_of_month: 31,
+    remind_days: 1,
+  }).select("id").single();
+  expect(rule.error).toBeNull();
+
+  const first = await member.from("entries").insert({
+    household_id: householdId,
+    kind: "expense",
+    amount_minor: 50000,
+    category_id: food.data?.id,
+    person_id: me.data.user?.id,
+    occurred_on: "2026-02-28",
+    recurring_rule_id: rule.data?.id,
+  });
+  const second = await member.from("entries").insert({
+    household_id: householdId,
+    kind: "expense",
+    amount_minor: 50000,
+    category_id: food.data?.id,
+    person_id: me.data.user?.id,
+    occurred_on: "2026-02-28",
+    recurring_rule_id: rule.data?.id,
+  });
+  expect(first.error).toBeNull();
+  expect(second.error).not.toBeNull();
+});
+
 // month_key logika testirana u: supabase/tests/month-key.test.ts
 // (odvojen fajl — ne zavisi od Supabase veze, uvek se može pokrenuti)

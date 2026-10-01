@@ -619,6 +619,13 @@ a:hover {
   letter-spacing: 0.12em;
 }
 
+/* Spisak blokova s formama u podešavanjima. Nosi raspored, ne ukras. */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 .tag {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 0.625rem;

@@ -361,8 +361,15 @@ export type GatewayResult = { error: GatewayError };
  */
 export type EntryGateway = {
   insertEntry(draft: EntryDraft): Promise<GatewayResult>;
-  createWithRule(draft: RepeatingDraft): Promise<GatewayResult>;
+  createWithRule(draft: RepeatingDraft, requestId: string): Promise<GatewayResult>;
 };
+
+/**
+ * Prolaz se pravi pri slanju, ne pri iscrtavanju: `createBrowserSupabase` baca
+ * ako nedostaje `NEXT_PUBLIC_SUPABASE_*`. Fabrika je zato unutra, da ta greška
+ * uđe u istu granu kao i svaka druga i ne ostavi dugme na „Čuvam…“.
+ */
+export type EntryGatewayFactory = () => EntryGateway;
 
 export type SaveResult = { ok: true } | { ok: false; message: string };
 
@@ -370,13 +377,18 @@ export type SaveResult = { ok: true } | { ok: false; message: string };
  * Šalje nacrt i vraća ishod. Ne dira ulaz i ne baca: neuspeh je vrednost, pa
  * pozivalac nema razloga da bilo šta očisti — polja ostaju kakva su bila.
  */
-export async function saveEntry(draft: EntryDraft, gateway: EntryGateway): Promise<SaveResult> {
+export async function saveEntry(
+  draft: EntryDraft,
+  createGateway: EntryGatewayFactory,
+  requestId: string,
+): Promise<SaveResult> {
   try {
+    const gateway = createGateway();
     const repeat = draft.repeat;
     const result =
       repeat === null
         ? await gateway.insertEntry(draft)
-        : await gateway.createWithRule({ ...draft, repeat });
+        : await gateway.createWithRule({ ...draft, repeat }, requestId);
 
     if (result.error) {
       return { ok: false, message: entryErrorMessage(result.error.message) };
@@ -386,6 +398,84 @@ export async function saveEntry(draft: EntryDraft, gateway: EntryGateway): Promi
   } catch (caught) {
     return { ok: false, message: entryErrorMessage(thrownMessage(caught, "")) };
   }
+}
+
+/**
+ * Identifikator pokušaja, zajedno sa nacrtom na koji se odnosi.
+ *
+ * Isti nacrt posle pada dobija **isti** identifikator, pa baza prepozna retry i
+ * vrati već napravljen unos. Promenjen nacrt dobija nov, pa dve identične
+ * pretplate — iznos, kategorija, dan — i dalje mogu da postoje kao dva unosa.
+ */
+export type RequestTicket = { key: string; requestId: string };
+
+/** Kanonski potpis nacrta. Svako polje koje ide u bazu ulazi u ključ. */
+export function draftKey(draft: EntryDraft): string {
+  return JSON.stringify([
+    draft.householdId,
+    draft.kind,
+    draft.amountMinor,
+    draft.categoryId,
+    draft.personId,
+    draft.occurredOn,
+    draft.note,
+    draft.repeat?.dayOfMonth ?? null,
+    draft.repeat?.remindDays ?? null,
+  ]);
+}
+
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/**
+ * `crypto.randomUUID` postoji u svakom sigurnom kontekstu, ali ne i na `http://`
+ * adresi koja nije `localhost`. Rezerva pravi isti oblik iz `getRandomValues`,
+ * da forma na takvoj adresi ne bi ostala bez identifikatora.
+ */
+export function newRequestId(): string {
+  const source = globalThis.crypto;
+
+  if (source && typeof source.randomUUID === "function") {
+    return source.randomUUID();
+  }
+
+  if (source && typeof source.getRandomValues === "function") {
+    const bytes = source.getRandomValues(new Uint8Array(16));
+    bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+    bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+    const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    return [
+      hex.slice(0, 8),
+      hex.slice(8, 12),
+      hex.slice(12, 16),
+      hex.slice(16, 20),
+      hex.slice(20),
+    ].join("-");
+  }
+
+  throw new Error("Pregledač ne nudi crypto, pa zahtev ne može da dobije identifikator.");
+}
+
+export function isRequestId(value: string): boolean {
+  return UUID_V4.test(value);
+}
+
+/**
+ * Identifikator za ovo slanje: isti kao prošli put ako je nacrt isti, nov ako
+ * je član bilo šta promenio. Posle uspeha pozivalac baca kartu (`null`), pa
+ * sledeće slanje istog nacrta ide kao nov unos.
+ */
+export function ticketFor(
+  draft: EntryDraft,
+  previous: RequestTicket | null,
+  nextId: () => string = newRequestId,
+): RequestTicket {
+  const key = draftKey(draft);
+
+  if (previous && previous.key === key) {
+    return previous;
+  }
+
+  return { key, requestId: nextId() };
 }
 
 /**

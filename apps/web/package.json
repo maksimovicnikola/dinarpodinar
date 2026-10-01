@@ -5,6 +5,7 @@
     "dev": "next dev",
     "build": "next build",
     "test": "vitest run",
+    "test:seam": "vitest run --config vitest.seam.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

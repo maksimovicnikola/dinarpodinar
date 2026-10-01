@@ -8,6 +8,7 @@
     "test:packages": "pnpm -r --filter \"./packages/*\" test",
     "test:rls": "vitest run supabase/tests/rls.test.ts",
     "test:entry-rpc": "vitest run supabase/tests/entry-rpc.test.ts",
+    "test:seam": "pnpm --filter web test:seam",
     "test:db": "pnpm run test:rls && pnpm run test:entry-rpc",
     "test:month-key": "vitest run supabase/tests/month-key.test.ts",
     "test:sql": "vitest run supabase/tests/migration-invariants.test.ts",

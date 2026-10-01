@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 
 import { Field, Notice } from "@/components/form";
 import { Passbook, PassbookHeader, Ruler } from "@/components/passbook";
@@ -9,16 +9,20 @@ import {
   canSend,
   categoriesOfKind,
   entryBlocker,
+  entryErrorMessage,
   initialEntryState,
   isCalendarDate,
   phaseAfter,
   saveEntry,
   saveLabel,
   switchKind,
+  ticketFor,
   validateEntry,
   type CategoryOption,
   type EntryGateway,
   type PersonOption,
+  type RequestTicket,
+  type SaveResult,
   type SubmitPhase,
 } from "@/lib/entry-form";
 import { createBrowserSupabase } from "@/lib/supabase/client";
@@ -30,6 +34,10 @@ import { createBrowserSupabase } from "@/lib/supabase/client";
  * `create_entry_with_rule`, jer dva odvojena poziva iz pregledača nisu jedna
  * transakcija: pad drugog ostavio bi pravilo bez unosa, a član ga ne može ni
  * obrisati ni ugasiti.
+ *
+ * Fabrika se prosleđuje `saveEntry`-ju, ne poziva ovde: `createBrowserSupabase`
+ * baca kad nedostaje `NEXT_PUBLIC_SUPABASE_*`, a ta greška mora da završi kao
+ * poruka pod formom, ne kao dugme koje zauvek piše „Čuvam…“.
  */
 function browserGateway(): EntryGateway {
   const supabase = createBrowserSupabase();
@@ -46,7 +54,7 @@ function browserGateway(): EntryGateway {
         note: draft.note,
       });
     },
-    async createWithRule(draft) {
+    async createWithRule(draft, requestId) {
       return supabase.rpc("create_entry_with_rule", {
         p_household_id: draft.householdId,
         p_kind: draft.kind,
@@ -57,6 +65,7 @@ function browserGateway(): EntryGateway {
         p_note: draft.note,
         p_day_of_month: draft.repeat.dayOfMonth,
         p_remind_days: draft.repeat.remindDays,
+        p_request_id: requestId,
       });
     },
   };
@@ -84,6 +93,11 @@ export function EntryForm({
   const [phase, setPhase] = useState<SubmitPhase>("idle");
   const [error, setError] = useState<string | null>(null);
 
+  // Karta pokušaja preživi pad, da retry istog nacrta nosi isti identifikator
+  // i da ga baza prepozna umesto da napravi drugo pravilo. Ref, ne state:
+  // menja se u obradi događaja i ne traži ponovno iscrtavanje.
+  const ticket = useRef<RequestTicket | null>(null);
+
   const visibleCategories = useMemo(
     () => categoriesOfKind(categories, state.kind),
     [categories, state.kind],
@@ -107,7 +121,21 @@ export function EntryForm({
     }
 
     setPhase("sending");
-    const result = await saveEntry(checked.draft, browserGateway());
+
+    // Ništa između brave i njenog otpuštanja ne sme da izađe kao izuzetak:
+    // nepostojeći `crypto`, nedostajuća okolina, pukla fabrika klijenta — sve
+    // mora da završi kao poruka i vraćeno dugme, ne kao večno „Čuvam…“.
+    let result: SaveResult;
+    try {
+      const attempt = ticketFor(checked.draft, ticket.current);
+      ticket.current = attempt;
+      result = await saveEntry(checked.draft, browserGateway, attempt.requestId);
+    } catch (caught) {
+      result = {
+        ok: false,
+        message: entryErrorMessage(caught instanceof Error ? caught.message : null),
+      };
+    }
 
     // Nijedno polje se ne dira ni pri uspehu ni pri padu. Pad mreže zato
     // ostavlja iznos, kategoriju, datum i belešku tačno onakve kakvi su bili.
@@ -118,7 +146,13 @@ export function EntryForm({
       return;
     }
 
-    router.push(`/h/${householdId}`);
+    // Karta je potrošena: sledeće slanje je nov unos, pa i dve iste pretplate
+    // mogu da se upišu jedna za drugom.
+    ticket.current = null;
+
+    // Mesec unosa, ne tekući mesec. Unos sa datumom iz prošlog ili sledećeg
+    // meseca inače nestane sa ekrana čim se sačuva.
+    router.push(`/h/${householdId}?month=${checked.draft.occurredOn.slice(0, 7)}`);
     router.refresh();
   }
 

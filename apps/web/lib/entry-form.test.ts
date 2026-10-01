@@ -4,15 +4,19 @@ import {
   canSend,
   categoriesOfKind,
   defaultOccurredOn,
+  draftKey,
   entryBlocker,
   entryErrorMessage,
   firstCategoryId,
   initialEntryState,
   isCalendarDate,
+  isRequestId,
+  newRequestId,
   phaseAfter,
   saveEntry,
   saveLabel,
   switchKind,
+  ticketFor,
   validateEntry,
   type CategoryOption,
   type EntryDraft,
@@ -450,10 +454,17 @@ function gateway(overrides: Partial<EntryGateway> = {}): EntryGateway {
   };
 }
 
+const REQUEST_ID = "7a1f0d9e-2b3c-4d5e-8f60-112233445566";
+
+/** Fabrika koja vraća isti prolaz — pozivi se broje nad njim. */
+function factory(api: EntryGateway) {
+  return () => api;
+}
+
 describe("saveEntry", () => {
   it("običan unos ide direktnim upisom", async () => {
     const api = gateway();
-    await expect(saveEntry(draft(), api)).resolves.toEqual({ ok: true });
+    await expect(saveEntry(draft(), factory(api), REQUEST_ID)).resolves.toEqual({ ok: true });
     expect(api.insertEntry).toHaveBeenCalledTimes(1);
     expect(api.createWithRule).not.toHaveBeenCalled();
   });
@@ -461,20 +472,20 @@ describe("saveEntry", () => {
   it("unos sa ponavljanjem ide kroz atomičnu RPC, nikad kroz dva upisa", async () => {
     const api = gateway();
     const repeating = draft({ repeat: { dayOfMonth: 5, remindDays: 3 } });
-    await expect(saveEntry(repeating, api)).resolves.toEqual({ ok: true });
+    await expect(saveEntry(repeating, factory(api), REQUEST_ID)).resolves.toEqual({ ok: true });
     expect(api.createWithRule).toHaveBeenCalledTimes(1);
     expect(api.insertEntry).not.toHaveBeenCalled();
 
-    const sent = (api.createWithRule as ReturnType<typeof vi.fn>).mock
-      .calls[0]?.[0] as RepeatingDraft;
-    expect(sent.repeat).toEqual({ dayOfMonth: 5, remindDays: 3 });
+    const call = (api.createWithRule as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect((call?.[0] as RepeatingDraft).repeat).toEqual({ dayOfMonth: 5, remindDays: 3 });
+    expect(call?.[1]).toBe(REQUEST_ID);
   });
 
   it("greška iz baze postaje poruka, ne izuzetak", async () => {
     const api = gateway({
       insertEntry: vi.fn(async () => ({ error: { message: "Arhivirana kategorija ne prima nove unose" } })),
     });
-    await expect(saveEntry(draft(), api)).resolves.toEqual({
+    await expect(saveEntry(draft(), factory(api), REQUEST_ID)).resolves.toEqual({
       ok: false,
       message: "Kategorija je u međuvremenu arhivirana. Izaberite drugu i sačuvajte ponovo.",
     });
@@ -486,7 +497,7 @@ describe("saveEntry", () => {
         throw new TypeError("Failed to fetch");
       }),
     });
-    await expect(saveEntry(draft(), api)).resolves.toEqual({
+    await expect(saveEntry(draft(), factory(api), REQUEST_ID)).resolves.toEqual({
       ok: false,
       message:
         "Nema veze sa serverom. Polja su ostala popunjena — proverite internet i pokušajte ponovo.",
@@ -499,7 +510,11 @@ describe("saveEntry", () => {
         throw "pukla veza";
       }),
     });
-    const result = await saveEntry(draft({ repeat: { dayOfMonth: 1, remindDays: 1 } }), api);
+    const result = await saveEntry(
+      draft({ repeat: { dayOfMonth: 1, remindDays: 1 } }),
+      factory(api),
+      REQUEST_ID,
+    );
     expect(result.ok).toBe(false);
     expect(!result.ok && result.message.length).toBeGreaterThan(0);
   });
@@ -513,8 +528,170 @@ describe("saveEntry", () => {
       }),
     });
 
-    await saveEntry(original, api);
+    await saveEntry(original, factory(api), REQUEST_ID);
     expect(original).toEqual(copy);
+  });
+
+  it("pad same fabrike klijenta je ishod, ne izuzetak", async () => {
+    const broken = () => {
+      throw new Error(
+        "Nedostaje NEXT_PUBLIC_SUPABASE_URL ili NEXT_PUBLIC_SUPABASE_ANON_KEY. Vidi apps/web/.env.local.example.",
+      );
+    };
+
+    const result = await saveEntry(draft(), broken, REQUEST_ID);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.message).toBe(
+      "Pokušajte ponovo. Ako se ponavlja, osvežite stranu i proverite kategoriju i osobu.",
+    );
+  });
+
+  it("pad fabrike vraća istu fazu kao i pad mreže, pa dugme ne ostane na „Čuvam…“", async () => {
+    const broken = () => {
+      throw new Error("nema okoline");
+    };
+
+    const result = await saveEntry(draft({ repeat: { dayOfMonth: 3, remindDays: 1 } }), broken, REQUEST_ID);
+    expect(phaseAfter("sending", result)).toBe("idle");
+    expect(canSend(phaseAfter("sending", result))).toBe(true);
+  });
+
+  it("fabrika se zove tek pri slanju, jednom po pokušaju", async () => {
+    const api = gateway();
+    const create = vi.fn(() => api);
+
+    expect(create).not.toHaveBeenCalled();
+    await saveEntry(draft(), create, REQUEST_ID);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ----------------------------------------------------------------
+// Idempotencija: identifikator pokušaja
+// ----------------------------------------------------------------
+
+describe("ticketFor", () => {
+  let counter = 0;
+  const nextId = () => `id-${(counter += 1)}`;
+
+  it("retry istog nacrta nosi isti identifikator", () => {
+    counter = 0;
+    const first = ticketFor(draft(), null, nextId);
+    const retry = ticketFor(draft(), first, nextId);
+    expect(retry.requestId).toBe(first.requestId);
+    expect(retry).toBe(first);
+  });
+
+  it("promena bilo kog polja daje nov identifikator", () => {
+    counter = 0;
+    const base = ticketFor(draft(), null, nextId);
+
+    const changed: Array<Partial<EntryDraft>> = [
+      { amountMinor: 1251 },
+      { categoryId: "bills" },
+      { personId: "marko" },
+      { occurredOn: "2026-09-29" },
+      { note: "drugo" },
+      { kind: "income" },
+      { repeat: { dayOfMonth: 30, remindDays: 1 } },
+    ];
+
+    for (const patch of changed) {
+      const next = ticketFor(draft(patch), base, nextId);
+      expect(next.requestId, JSON.stringify(patch)).not.toBe(base.requestId);
+    }
+  });
+
+  it("promena podsetnika daje nov identifikator", () => {
+    counter = 0;
+    const base = ticketFor(draft({ repeat: { dayOfMonth: 5, remindDays: 1 } }), null, nextId);
+    const next = ticketFor(draft({ repeat: { dayOfMonth: 5, remindDays: 4 } }), base, nextId);
+    expect(next.requestId).not.toBe(base.requestId);
+  });
+
+  it("posle uspeha karta se baca, pa isti nacrt dobija nov identifikator", () => {
+    counter = 0;
+    const first = ticketFor(draft(), null, nextId);
+    // Dve stvarne pretplate istog iznosa, dana i kategorije moraju da budu dva unosa.
+    const second = ticketFor(draft(), null, nextId);
+    expect(second.requestId).not.toBe(first.requestId);
+  });
+
+  it("povratak na raniji nacrt posle izmene ne vraća stari identifikator", () => {
+    counter = 0;
+    const first = ticketFor(draft(), null, nextId);
+    const edited = ticketFor(draft({ amountMinor: 999 }), first, nextId);
+    const back = ticketFor(draft(), edited, nextId);
+    expect(back.requestId).not.toBe(first.requestId);
+    expect(back.requestId).not.toBe(edited.requestId);
+  });
+
+  it("ključ nacrta pokriva svako polje koje ide u bazu", () => {
+    const base = draftKey(draft());
+    const fields: Array<Partial<EntryDraft>> = [
+      { householdId: "99999999-9999-9999-9999-999999999999" },
+      { kind: "income" },
+      { amountMinor: 1 },
+      { categoryId: "x" },
+      { personId: "y" },
+      { occurredOn: "2026-01-01" },
+      { note: "z" },
+      { repeat: { dayOfMonth: 1, remindDays: 1 } },
+    ];
+
+    for (const patch of fields) {
+      expect(draftKey(draft(patch)), JSON.stringify(patch)).not.toBe(base);
+    }
+  });
+
+  it("isti nacrt uvek daje isti ključ", () => {
+    expect(draftKey(draft())).toBe(draftKey(draft()));
+    expect(draftKey(draft({ repeat: { dayOfMonth: 5, remindDays: 2 } }))).toBe(
+      draftKey(draft({ repeat: { dayOfMonth: 5, remindDays: 2 } })),
+    );
+  });
+});
+
+describe("newRequestId", () => {
+  it("daje ispravan v4 UUID", () => {
+    const value = newRequestId();
+    expect(isRequestId(value), value).toBe(true);
+  });
+
+  it("dva poziva ne daju istu vrednost", () => {
+    const seen = new Set(Array.from({ length: 64 }, () => newRequestId()));
+    expect(seen.size).toBe(64);
+  });
+
+  it("rezerva bez randomUUID i dalje daje ispravan v4 UUID", () => {
+    const original = globalThis.crypto;
+    const fallback = {
+      getRandomValues: (array: Uint8Array) => original.getRandomValues(array),
+    } as unknown as Crypto;
+
+    Object.defineProperty(globalThis, "crypto", { value: fallback, configurable: true });
+    try {
+      const value = newRequestId();
+      expect(isRequestId(value), value).toBe(true);
+    } finally {
+      Object.defineProperty(globalThis, "crypto", { value: original, configurable: true });
+    }
+  });
+
+  it("bez crypto-a baca, pa pozivalac mora da uhvati", () => {
+    const original = globalThis.crypto;
+    Object.defineProperty(globalThis, "crypto", { value: undefined, configurable: true });
+    try {
+      expect(() => newRequestId()).toThrow(/crypto/);
+    } finally {
+      Object.defineProperty(globalThis, "crypto", { value: original, configurable: true });
+    }
+  });
+
+  it("odbija niske koje nisu v4 UUID", () => {
+    for (const value of ["", "nije-uuid", "7a1f0d9e2b3c4d5e8f60112233445566", REQUEST_ID.toUpperCase()]) {
+      expect(isRequestId(value), value).toBe(false);
+    }
   });
 });
 
@@ -542,11 +719,11 @@ describe("brava protiv dvostrukog slanja", () => {
 
     // Drugi klik stiže pre nego što se prvi vratio.
     if (canSend(phase as "idle" | "sending" | "sent")) {
-      await saveEntry(draft(), api);
+      await saveEntry(draft(), factory(api), REQUEST_ID);
     }
     expect(api.insertEntry).not.toHaveBeenCalled();
 
-    const result = await saveEntry(draft(), api);
+    const result = await saveEntry(draft(), factory(api), REQUEST_ID);
     phase = phaseAfter("sending", result);
     expect(phase).toBe("sent");
     expect(api.insertEntry).toHaveBeenCalledTimes(1);

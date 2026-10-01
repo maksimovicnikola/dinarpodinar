@@ -112,30 +112,49 @@ describe("skup migracija", () => {
   });
 });
 
+/** Potpis koji aplikacija zaista zove — sa identifikatorom zahteva na kraju. */
+const RPC_SIGNATURE = String.raw`public\.create_entry_with_rule\(uuid, text, bigint, uuid, uuid, date, text, integer, integer, uuid\)`;
+
+/** Poslednja (važeća) definicija funkcije, ne ona koju je kasnija migracija zamenila. */
+function lastRpcBody(): string {
+  const bodies = [
+    ...sql.matchAll(/create or replace function public\.create_entry_with_rule[\s\S]*?\$\$;/g),
+  ];
+  return bodies.at(-1)?.[0] ?? "";
+}
+
 describe("atomičan unos sa ponavljanjem", () => {
   it("funkcija postoji i radi oba upisa", () => {
-    expect(sql).toMatch(/create or replace function public\.create_entry_with_rule/);
-    expect(sql).toMatch(
-      /create or replace function public\.create_entry_with_rule[\s\S]*?insert into public\.recurring_rules[\s\S]*?insert into public\.entries[\s\S]*?\$\$;/,
+    expect(lastRpcBody()).toMatch(
+      /insert into public\.recurring_rules[\s\S]*?insert into public\.entries/,
     );
   });
 
-  it("proverava sesiju i članstvo, jer security definer zaobilazi RLS", () => {
-    const body = /create or replace function public\.create_entry_with_rule[\s\S]*?\$\$;/.exec(sql)?.[0] ?? "";
+  it("proverava sesiju, identifikator zahteva i članstvo, jer security definer zaobilazi RLS", () => {
+    const body = lastRpcBody();
     expect(body).toMatch(/security definer/);
     expect(body).toMatch(/auth\.uid\(\) is null/);
+    expect(body).toMatch(/p_request_id is null/);
     expect(body).toMatch(/not public\.is_member\(p_household_id\)/);
   });
 
-  it("execute dobija samo authenticated", () => {
-    expect(sql).toMatch(
-      /revoke execute on function public\.create_entry_with_rule\([^)]*\)\s*from public, anon;/,
-    );
-    expect(sql).toMatch(
-      /grant\s+execute on function public\.create_entry_with_rule\([^)]*\)\s*to authenticated;/,
-    );
+  it("vraća postojeći unos istog zahteva umesto drugog pravila", () => {
+    const body = lastRpcBody();
+    expect(body).toMatch(/where created_by = auth\.uid\(\)\s*and request_id = p_request_id/);
+    expect(body).toMatch(/when unique_violation then/);
+  });
+
+  it("execute ima samo authenticated; public, anon i service_role su izričito oduzeti", () => {
+    expect(sql).toMatch(new RegExp(String.raw`revoke execute on function ${RPC_SIGNATURE}\s*from public, anon, service_role;`));
+    expect(sql).toMatch(new RegExp(String.raw`grant\s+execute on function ${RPC_SIGNATURE}\s*to authenticated;`));
     expect(sql).not.toMatch(
       /grant[^;]*execute on function public\.create_entry_with_rule[^;]*service_role/,
+    );
+  });
+
+  it("stari potpis bez identifikatora zahteva je uklonjen", () => {
+    expect(sql).toMatch(
+      /drop function if exists public\.create_entry_with_rule\(\s*uuid, text, bigint, uuid, uuid, date, text, integer, integer\s*\)/,
     );
   });
 
@@ -149,5 +168,30 @@ describe("atomičan unos sa ponavljanjem", () => {
       const escaped = signature.replace(/[.()]/g, "\\$&");
       expect(new RegExp(`grant\\s+execute on function ${escaped}`).test(sql), signature).toBe(true);
     }
+  });
+});
+
+describe("ključ idempotencije", () => {
+  it("unos nosi nullable request_id", () => {
+    expect(sql).toMatch(/alter table public\.entries add column request_id uuid;/);
+    expect(sql).not.toMatch(/add column request_id uuid not null/);
+  });
+
+  it("jedinstvenost je po autoru, pa dva člana ne mogu da se sudare", () => {
+    expect(sql).toMatch(
+      /create unique index entries_request\s*on public\.entries \(created_by, request_id\)\s*where request_id is not null;/,
+    );
+  });
+
+  it("jedinstvenost NIJE po poslovnim poljima — dve iste pretplate su legitimne", () => {
+    const forbidden = /create unique index[^;]*on public\.(entries|recurring_rules)[^;]*amount_minor[^;]*;/;
+    expect(sql).not.toMatch(forbidden);
+  });
+
+  it("ključ se posle upisa ne menja", () => {
+    expect(sql).toMatch(/create trigger entries_keep_request_id\s*before update on public\.entries/);
+    expect(sql).toMatch(
+      /function public\.keep_entry_request_id\(\)[\s\S]*?new\.request_id := old\.request_id;/,
+    );
   });
 });

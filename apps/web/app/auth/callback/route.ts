@@ -30,8 +30,8 @@ export async function GET(request: NextRequest) {
       return redirectTo(loginErrorPath("razmena"), url.origin);
     }
   } catch (caught) {
-    // `supabase-js` propušta grešku iz upisa kolačića nazad kroz razmenu.
-    // Razdvajamo je od neuspele razmene da poruka članu bude tačna.
+    // Razmena može da padne i zbog upisa kolačića (npr. kad je ovo pozvano van
+    // rute). Razdvajamo to od neuspele razmene da poruka članu bude tačna.
     if (cookieFailure() || isImmutableCookieError(caught)) {
       console.error("auth/callback: upis kolačića sesije nije uspeo", caught);
       return redirectTo(loginErrorPath("kolacici"), url.origin);

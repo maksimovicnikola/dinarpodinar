@@ -34,6 +34,7 @@ import {
   OWNER_STAYS,
   RULE_GONE,
   SESSION_GONE,
+  sessionDenial,
   settingsDone,
   settingsErrorMessage,
   settingsFailure,
@@ -61,13 +62,24 @@ type OpenGate = { ok: true; supabase: SupabaseClient; householdId: string };
 
 type Gate = OpenGate | { ok: false; message: string };
 
+type AuthResult = Awaited<ReturnType<SupabaseClient["auth"]["getUser"]>>;
+
 /**
- * Prijava i tačno uloga `owner` u domaćinstvu iz forme.
+ * Prijava, sačuvana sesija, pa tačno uloga `owner` u domaćinstvu iz forme.
  *
  * `household_id` dolazi iz skrivenog polja, pa se ne uzima zdravo za gotovo:
  * prvo mora da bude `uuid` (neispravan tekst bi iz Postgresa vratio grešku
  * tipa), a onda se uloga čita baš za taj red — `.eq("user_id", …)` je obavezno
  * jer RLS pušta i redove ostalih članova istog domaćinstva.
+ *
+ * Između prijave i uloge stoji treća provera: da li je `getUser` uspeo da
+ * upiše osvežene kolačiće. Redosled je namerno takav — posle `getUser`, jer se
+ * tek tu token osvežava, i pre upita o ulozi i pre ijedne izmene, jer izmena
+ * upisana uz nesačuvanu sesiju izgleda vlasniku kao da se nije desila.
+ *
+ * Greška pri upisu dolazi kroz `cookieFailure()`, a ne kao izuzetak. `getUser`
+ * se ipak hvata, jer može da padne i iz drugih razloga: takav pad nije stvar
+ * sesije i ide dalje, zajedničkom rukovaocu.
  */
 async function ownerGate(rawHouseholdId: string): Promise<Gate> {
   const householdId = uuidParam(rawHouseholdId);
@@ -75,18 +87,45 @@ async function ownerGate(rawHouseholdId: string): Promise<Gate> {
     return { ok: false, message: BAD_ADDRESS };
   }
 
-  const { supabase } = await createWritableServerSupabase();
-  const auth = await supabase.auth.getUser();
+  const { supabase, cookieFailure } = await createWritableServerSupabase();
 
-  if (auth.error || !auth.data.user) {
-    return { ok: false, message: SESSION_GONE };
+  let auth: AuthResult | null = null;
+  let thrown: unknown = null;
+
+  try {
+    auth = await supabase.auth.getUser();
+  } catch (caught) {
+    thrown = caught;
+  }
+
+  const cookieBroken = cookieFailure();
+  const user = auth === null || auth.error ? null : auth.data.user;
+
+  const denial = sessionDenial({
+    signedIn: user !== null,
+    cookiesPersisted: cookieBroken === null,
+  });
+
+  // `user === null` je već pokriveno kroz `signedIn`; ponovljeno je samo zato
+  // što prolaz kroz pomoćnu funkciju ne sužava tip korisnika.
+  if (denial !== null || user === null) {
+    if (denial?.reason === "kolacici") {
+      // Diagnostika ide u log, ne u odgovor: tekst greške nije za ekran.
+      console.error("podešavanja: osvežena sesija nije upisana u kolačiće", cookieBroken);
+    } else if (thrown !== null) {
+      // Pad koji nema veze sa kolačićima nije stvar sesije — neka ga vidi
+      // zajednički rukovalac umesto da se prećuti kao „prijava je istekla“.
+      throw thrown;
+    }
+
+    return { ok: false, message: denial?.message ?? SESSION_GONE };
   }
 
   const membership = await supabase
     .from("memberships")
     .select("role")
     .eq("household_id", householdId)
-    .eq("user_id", auth.data.user.id)
+    .eq("user_id", user.id)
     .maybeSingle();
 
   if (membership.error) {

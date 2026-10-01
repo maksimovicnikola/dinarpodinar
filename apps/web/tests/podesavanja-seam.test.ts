@@ -47,6 +47,7 @@ import {
   OWNER_ONLY,
   OWNER_STAYS,
   RULE_GONE,
+  SESSION_GONE,
   type SettingsState,
 } from "@/lib/settings";
 
@@ -67,10 +68,20 @@ type Jar = Map<string, string>;
 /** Korisnik u čije ime se akcija izvršava. Postavlja ga `asUser`. */
 let acting: Jar = new Map();
 
+/** Kad je tačno, upis kolačića puca — isto kao pregledač koji ih odbija. */
+let cookieWritesFail = false;
+
+/** Broj pokušaja upisa; test njime dokazuje da je upis uopšte bio pokušan. */
+let cookieWriteAttempts = 0;
+
 vi.mock("next/headers", () => ({
   cookies: async () => ({
     getAll: () => [...acting.entries()].map(([name, value]) => ({ name, value })),
     set: (name: string, value: string) => {
+      cookieWriteAttempts += 1;
+      if (cookieWritesFail) {
+        throw new Error("Cookie write refused by the test");
+      }
       acting.set(name, value);
     },
   }),
@@ -202,6 +213,53 @@ async function asUser<T>(user: TestUser, run: () => Promise<T>): Promise<T> {
   } finally {
     acting = previous;
   }
+}
+
+/**
+ * Učini da sačuvana sesija izgleda istekla, pa `getUser` mora da je osveži i
+ * da pri tom upiše nove kolačiće. `@supabase/ssr` čuva ceo `Session` objekat
+ * kao `base64-<base64url(JSON)>`, pa se `expires_at` pomera u prošlost.
+ */
+function expireSession(jar: Jar): void {
+  let patched = 0;
+
+  for (const [name, value] of [...jar.entries()]) {
+    if (!value.startsWith("base64-")) {
+      continue;
+    }
+
+    const session = JSON.parse(
+      Buffer.from(value.slice("base64-".length), "base64url").toString("utf8"),
+    ) as { expires_at?: number; expires_in?: number };
+
+    session.expires_at = Math.floor(Date.now() / 1000) - 60;
+    session.expires_in = 0;
+
+    jar.set(
+      name,
+      `base64-${Buffer.from(JSON.stringify(session), "utf8").toString("base64url")}`,
+    );
+    patched += 1;
+  }
+
+  if (patched === 0) {
+    throw new Error("Sesija nije nađena u kolačićima; test ne bi dokazao ništa.");
+  }
+}
+
+/** Pokreni posao sa pregledačem koji odbija upis kolačića. */
+async function withBrokenCookieWrites<T>(run: () => Promise<T>): Promise<T> {
+  cookieWritesFail = true;
+  try {
+    return await run();
+  } finally {
+    cookieWritesFail = false;
+  }
+}
+
+/** Markup jednog `<input>` po `id`-u, da se vidi da li nosi `checked`. */
+function inputMarkup(markup: string, id: string): string | null {
+  return new RegExp(`<input[^>]*\\bid="${id}"[^>]*>`).exec(markup)?.[0] ?? null;
 }
 
 const EMPTY: SettingsState = { ok: false, message: null, token: null, stamp: "" };
@@ -1150,6 +1208,174 @@ describe("vlasnik dva domaćinstva ne prenosi prava iz jednog u drugo", () => {
     expect(state.ok, state.message ?? "").toBe(true);
     expect((await invitationsOf(domC)).some((row) => row.email === email)).toBe(true);
     expect((await invitationsOf(domD)).some((row) => row.email === email)).toBe(false);
+  });
+});
+
+// ----------------------------------------------------------------
+// Prekidač ponavljanja prati bazu, ne zatečeno stanje ekrana
+//
+// Pravilo se gasi i bez ijednog klika na ovoj strani: arhiviranje kategorije
+// (`categories_archive_rules`) i uklanjanje člana (`memberships_deactivate_rules`)
+// rade to kroz okidače. Posle osvežavanja prekidač mora da stoji na onome što
+// baza kaže — zatečeno „uključeno“ bi sledećim čuvanjem pokušalo da oživi
+// pravilo koje baza više ne prima.
+// ----------------------------------------------------------------
+
+describe("ugašeno ponavljanje se vidi kao ugašeno", () => {
+  it("posle arhiviranja kategorije prekidač na strani više nije štikliran", async () => {
+    const category = await seedCategory(domA, `Sinh arhiva ${runStamp}`);
+    const rule = await seedRule(domA, category, ana.id);
+
+    const before = await get(`/h/${domA}/podesavanja`, ana.cookie);
+    const checkedBefore = inputMarkup(before.markup, `aktivno-${rule}`);
+    expect(checkedBefore, "prekidač aktivnog pravila").not.toBeNull();
+    expect(checkedBefore).toContain("checked");
+
+    const archived = await asUser(ana, () =>
+      archiveCategoryAction(EMPTY, form({ dom: domA, kategorija: category })),
+    );
+    expect(archived.ok, archived.message ?? "").toBe(true);
+    expect((await readRule(rule)).active).toBe(false);
+
+    const after = await get(`/h/${domA}/podesavanja`, ana.cookie);
+    const checkedAfter = inputMarkup(after.markup, `aktivno-${rule}`);
+    expect(checkedAfter, "prekidač ugašenog pravila").not.toBeNull();
+    expect(checkedAfter).not.toContain("checked");
+  });
+
+  it("posle uklanjanja člana prekidač njegovog ponavljanja više nije štikliran", async () => {
+    const gost = await signUp("pod-sinh-clan", "Sinhronizovani");
+    await joinHousehold(ana, gost, domA);
+
+    const category = await seedCategory(domA, `Sinh član ${runStamp}`);
+    const rule = await seedRule(domA, category, gost.id);
+
+    const before = await get(`/h/${domA}/podesavanja`, ana.cookie);
+    expect(inputMarkup(before.markup, `aktivno-${rule}`)).toContain("checked");
+
+    const removed = await asUser(ana, () =>
+      removeMemberAction(EMPTY, form({ dom: domA, clan: gost.id })),
+    );
+    expect(removed.ok, removed.message ?? "").toBe(true);
+    expect((await readRule(rule)).active).toBe(false);
+
+    const after = await get(`/h/${domA}/podesavanja`, ana.cookie);
+    const checkedAfter = inputMarkup(after.markup, `aktivno-${rule}`);
+    expect(checkedAfter).not.toBeNull();
+    expect(checkedAfter).not.toContain("checked");
+  });
+
+  it("zatečeno „uključeno“ sa starog ekrana baza odbija — arhivirana kategorija", async () => {
+    const category = await seedCategory(domA, `Zatečeno arhiva ${runStamp}`);
+    const rule = await seedRule(domA, category, ana.id);
+    await asUser(ana, () => archiveCategoryAction(EMPTY, form({ dom: domA, kategorija: category })));
+
+    // Tačno ono što bi poslao ekran otvoren pre arhiviranja.
+    const stale = await asUser(ana, () =>
+      saveRuleAction(
+        EMPTY,
+        form({ dom: domA, pravilo: rule, iznos: "1.000", dan: "5", podsetnik: "1", aktivno: "da" }),
+      ),
+    );
+
+    expect(stale.ok).toBe(false);
+    expect(stale.message).toContain("arhivirana");
+    expect((await readRule(rule)).active).toBe(false);
+  });
+
+  it("zatečeno „uključeno“ sa starog ekrana baza odbija — bivši član", async () => {
+    const gost = await signUp("pod-zateceno-clan", "Zatečeni");
+    await joinHousehold(ana, gost, domA);
+
+    const category = await seedCategory(domA, `Zatečeno član ${runStamp}`);
+    const rule = await seedRule(domA, category, gost.id);
+    await asUser(ana, () => removeMemberAction(EMPTY, form({ dom: domA, clan: gost.id })));
+
+    const stale = await asUser(ana, () =>
+      saveRuleAction(
+        EMPTY,
+        form({ dom: domA, pravilo: rule, iznos: "1.000", dan: "5", podsetnik: "1", aktivno: "da" }),
+      ),
+    );
+
+    expect(stale.ok).toBe(false);
+    expect(stale.message).toContain("nije član");
+    expect((await readRule(rule)).active).toBe(false);
+  });
+});
+
+// ----------------------------------------------------------------
+// Kapija: osvežena sesija mora i da se sačuva
+// ----------------------------------------------------------------
+
+describe("izmena ne prolazi ako osvežena sesija nije upisana u kolačiće", () => {
+  let vlasnik: TestUser;
+  let domE = "";
+  let kategorija = "";
+  const pocetno = `Kolačići ${runStamp}`;
+
+  beforeAll(async () => {
+    vlasnik = await signUp("pod-kolacici", "Kolačić");
+
+    const created = await api(vlasnik.token).rpc("create_household", {
+      p_name: `Kuća E ${runStamp}`,
+      p_currency: "RSD",
+    });
+    if (created.error) throw created.error;
+    domE = created.data as string;
+    createdHouseholdIds.push(domE);
+
+    kategorija = await seedCategory(domE, pocetno);
+  }, 120_000);
+
+  it("kontrola: istekla sesija se osveži i izmena prolazi kad upis radi", async () => {
+    // Bez ove kontrole sledeći test ne dokazuje ništa: pad bi mogao da dođe
+    // od istekle sesije, a ne od neuspelog upisa.
+    expireSession(vlasnik.jar);
+
+    const state = await asUser(vlasnik, () =>
+      renameCategoryAction(EMPTY, form({ dom: domE, kategorija, naziv: `${pocetno} ok` })),
+    );
+
+    expect(state.ok, state.message ?? "").toBe(true);
+    expect((await readCategory(kategorija)).name).toBe(`${pocetno} ok`);
+  });
+
+  it("kad upis padne, izmena se ne upisuje i ne prijavljuje kao uspeh", async () => {
+    const nazivPre = (await readCategory(kategorija)).name;
+    expireSession(vlasnik.jar);
+    revalidated.length = 0;
+    cookieWriteAttempts = 0;
+
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    let state: SettingsState;
+    // Poruke se prepisuju pre `mockRestore`, jer on briše i zapisane pozive.
+    let diagnostics: string[] = [];
+    try {
+      state = await withBrokenCookieWrites(() =>
+        asUser(vlasnik, () =>
+          renameCategoryAction(EMPTY, form({ dom: domE, kategorija, naziv: `${pocetno} ne sme` })),
+        ),
+      );
+      diagnostics = logged.mock.calls.map((call) => String(call[0]));
+    } finally {
+      logged.mockRestore();
+    }
+
+    // Upis je zaista bio pokušan; inače test meri istekle sesije, ne kolačiće.
+    expect(cookieWriteAttempts).toBeGreaterThan(0);
+
+    expect(state).toMatchObject({ ok: false, message: SESSION_GONE });
+
+    // Izmena nije stigla do baze.
+    expect((await readCategory(kategorija)).name).toBe(nazivPre);
+
+    // Keš se ne dira: ništa nije promenjeno.
+    expect(revalidated).toEqual([]);
+
+    // Razlog je završio u logu, a ne na ekranu.
+    expect(diagnostics.some((line) => line.includes("nije upisana u kolačiće"))).toBe(true);
+    expect(state.message).not.toContain("kolačić");
   });
 });
 

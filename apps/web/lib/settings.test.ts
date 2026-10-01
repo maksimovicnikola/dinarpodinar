@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { majorToMinor } from "./rows";
@@ -16,6 +19,8 @@ import {
   invitationPath,
   minorToInput,
   pendingInvitations,
+  ruleFieldsKey,
+  sessionDenial,
   settingsDone,
   settingsErrorMessage,
   settingsFailure,
@@ -153,6 +158,97 @@ describe("validateRule", () => {
       expect(parsed.ok, amount).toBe(false);
       expect(message(parsed), amount).toContain("pozitivan");
     }
+  });
+});
+
+describe("ruleFieldsKey", () => {
+  const server = { ruleId: "r1", amount: "1000", day: "5", remind: "1", active: true };
+
+  it("isti serverski red daje isti ključ, pa se upisano ne gubi pri osvežavanju", () => {
+    expect(ruleFieldsKey(server)).toBe(ruleFieldsKey({ ...server }));
+  });
+
+  it("ugašeno pravilo dobija drugi ključ nego uključeno", () => {
+    // Ovo je cela poenta: arhiviranje kategorije i uklanjanje člana gase
+    // pravilo kroz okidač, bez klika na ovoj strani. Promenjen ključ znači da
+    // React odbaci zatečeno „uključeno“ i uzme ono što baza kaže.
+    expect(ruleFieldsKey({ ...server, active: false })).not.toBe(ruleFieldsKey(server));
+  });
+
+  it("svaka izmenljiva vrednost ulazi u ključ", () => {
+    for (const changed of [
+      { amount: "2000" },
+      { day: "6" },
+      { remind: "2" },
+      { active: false },
+    ]) {
+      expect(ruleFieldsKey({ ...server, ...changed }), JSON.stringify(changed)).not.toBe(
+        ruleFieldsKey(server),
+      );
+    }
+  });
+
+  it("dva pravila nikad ne dele ključ, pa ne mogu da razmene stanje", () => {
+    expect(ruleFieldsKey({ ...server, ruleId: "r2" })).not.toBe(ruleFieldsKey(server));
+  });
+
+  it("vrednost sa separatorom ne pravi lažno poklapanje", () => {
+    // Spajanje niskom („r1|1000|5…“) bi ova dva reda izjednačilo.
+    const left = ruleFieldsKey({ ...server, amount: "1000", day: "5" });
+    const right = ruleFieldsKey({ ...server, amount: "1000|5", day: "" });
+    expect(left).not.toBe(right);
+  });
+
+  /**
+   * Ključ vredi samo ako stoji na poljima. Provera je nad izvorom jer u
+   * projektu nema DOM okruženja za iscrtavanje komponente; šav test iznad
+   * dokazuje serverski markup, a ovo čuva da se ključ ne izgubi iz forme.
+   */
+  it("forma ponavljanja zaista nosi taj ključ na poljima", () => {
+    const forms = readFileSync(
+      join(import.meta.dirname, "../app/h/[householdId]/podesavanja/forms.tsx"),
+      "utf8",
+    );
+
+    expect(forms).toMatch(/<RuleFields\s+key=\{ruleFieldsKey\(server\)\}/);
+  });
+});
+
+// ----------------------------------------------------------------
+// Kapija sesije
+// ----------------------------------------------------------------
+
+describe("sessionDenial", () => {
+  it("prijavljen pozivalac sa sačuvanom sesijom prolazi dalje", () => {
+    expect(sessionDenial({ signedIn: true, cookiesPersisted: true })).toBeNull();
+  });
+
+  it("neprijavljen pozivalac se zaustavlja", () => {
+    expect(sessionDenial({ signedIn: false, cookiesPersisted: true })).toEqual({
+      message: SESSION_GONE,
+      reason: "bez-prijave",
+    });
+  });
+
+  it("nesačuvana osvežena sesija zaustavlja i prijavljenog pozivaoca", () => {
+    // Bez ove grane izmena bi se upisala, a pregledač bi ostao sa starom
+    // sesijom — vlasniku bi izgledalo kao da se ništa nije sačuvalo.
+    expect(sessionDenial({ signedIn: true, cookiesPersisted: false })).toEqual({
+      message: SESSION_GONE,
+      reason: "kolacici",
+    });
+  });
+
+  it("kad su oba razloga tačna, kolačići su tačniji opis", () => {
+    expect(sessionDenial({ signedIn: false, cookiesPersisted: false })?.reason).toBe("kolacici");
+  });
+
+  it("razlog je za log, a poruka za ekran — i ne odaje koji je razlog", () => {
+    const first = sessionDenial({ signedIn: false, cookiesPersisted: true });
+    const second = sessionDenial({ signedIn: true, cookiesPersisted: false });
+
+    expect(first?.message).toBe(second?.message);
+    expect(first?.reason).not.toBe(second?.reason);
   });
 });
 

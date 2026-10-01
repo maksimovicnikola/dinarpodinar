@@ -64,10 +64,11 @@ export type WritableServerSupabase = {
 /**
  * Klijent za rute i server akcije, gde upis kolačića mora da uspe.
  *
- * Greška se i prijavljuje i pamti. Prijava (`throw`) je tu jer `supabase-js`
- * propušta greške iz `onAuthStateChange` nazad pozivaocu; pamćenje je tu jer
- * se biblioteka u budućoj verziji može odlučiti da ih proguta. Pozivalac posle
- * poziva pita `cookieFailure()` i tako ne zavisi od tog izbora.
+ * Greška se pamti i prijavljuje u log, ali se ne baca dalje. Ovaj `setAll`
+ * `@supabase/ssr` zove i iz obaveštenja o osveženom tokenu, a taj poziv niko
+ * ne čeka: bačena greška tamo ne stiže do pozivaoca nego postaje
+ * `unhandledRejection` u procesu. Zato je zapamćena greška jedini signal, a
+ * svaki pozivalac posle rada pita `cookieFailure()` i tek onda prijavi uspeh.
  */
 export async function createWritableServerSupabase(): Promise<WritableServerSupabase> {
   const cookieStore = await cookies();
@@ -87,7 +88,6 @@ export async function createWritableServerSupabase(): Promise<WritableServerSupa
         } catch (caught) {
           failure ??= caught;
           console.error("Upis kolačića sesije nije uspeo", caught);
-          throw caught;
         }
       },
     },

@@ -17,7 +17,13 @@ import { useActionState, useEffect, useState, type ReactNode } from "react";
 
 import { Field, Notice } from "@/components/form";
 import { SubmitButton } from "@/components/submit-button";
-import { invitationLink, emptySettings, type SettingsState } from "@/lib/settings";
+import {
+  emptySettings,
+  invitationLink,
+  ruleFieldsKey,
+  type RuleFieldValues,
+  type SettingsState,
+} from "@/lib/settings";
 
 import {
   archiveCategoryAction,
@@ -410,36 +416,29 @@ export function RemoveMemberForm({
 // Ponavljanja
 // ----------------------------------------------------------------
 
-export function RuleForm({
-  householdId,
-  ruleId,
-  amount: initialAmount,
-  day: initialDay,
-  remind: initialRemind,
-  active: initialActive,
-  description,
-}: {
-  householdId: string;
-  ruleId: string;
-  amount: string;
-  day: string;
-  remind: string;
-  active: boolean;
-  description: ReactNode;
-}) {
-  const [state, action] = useActionState(saveRuleAction, emptySettings);
-  const [amount, setAmount] = useState(initialAmount);
-  const [day, setDay] = useState(initialDay);
-  const [remind, setRemind] = useState(initialRemind);
-  const [active, setActive] = useState(initialActive);
+/**
+ * Polja ponavljanja, odvojena od forme.
+ *
+ * Odvojena su zbog ključa. Pravilo se gasi i bez ijednog klika ovde:
+ * arhiviranje kategorije i uklanjanje člana to rade kroz okidače u bazi. Posle
+ * takvog osvežavanja server pošalje `active: false`, ali kontrolisano stanje
+ * prekidača živi u React-u i ostalo bi na „uključeno“ — sledeće čuvanje bi
+ * pokušalo da oživi pravilo koje baza više ne prima. Ključ iz `ruleFieldsKey`
+ * nosi sve serverske vrednosti, pa React na svaku promenu odbaci staro stanje
+ * i polja krenu od onoga što baza kaže.
+ *
+ * Ključ stoji ovde, a ne na celoj formi, da `useActionState` iznad preživi:
+ * posle uspešnog čuvanja vrednosti se sinhronizuju, a potvrda ostaje na ekranu.
+ */
+function RuleFields(server: RuleFieldValues) {
+  const { ruleId } = server;
+  const [amount, setAmount] = useState(server.amount);
+  const [day, setDay] = useState(server.day);
+  const [remind, setRemind] = useState(server.remind);
+  const [active, setActive] = useState(server.active);
 
   return (
-    <form className="stack stack--tight" action={action}>
-      <HouseholdField householdId={householdId} />
-      <input type="hidden" name="pravilo" value={ruleId} />
-
-      <p className="fine">{description}</p>
-
+    <>
       <Field id={`iznos-${ruleId}`} label="Iznos">
         <input
           id={`iznos-${ruleId}`}
@@ -507,6 +506,28 @@ export function RuleForm({
           </span>
         </span>
       </div>
+    </>
+  );
+}
+
+export function RuleForm({
+  householdId,
+  description,
+  ...server
+}: RuleFieldValues & {
+  householdId: string;
+  description: ReactNode;
+}) {
+  const [state, action] = useActionState(saveRuleAction, emptySettings);
+
+  return (
+    <form className="stack stack--tight" action={action}>
+      <HouseholdField householdId={householdId} />
+      <input type="hidden" name="pravilo" value={server.ruleId} />
+
+      <p className="fine">{description}</p>
+
+      <RuleFields key={ruleFieldsKey(server)} {...server} />
 
       <Outcome state={state} />
 

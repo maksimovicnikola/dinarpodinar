@@ -80,6 +80,44 @@ export const emptySettings: SettingsState = {
   stamp: "",
 };
 
+export type SessionDenialReason = "bez-prijave" | "kolacici";
+
+export type SessionDenial = { message: string; reason: SessionDenialReason };
+
+/**
+ * Sme li kapija uopšte da pita za ulogu, ili se zahtev zaustavlja ovde.
+ *
+ * Dva razloga, jedna poruka. Prvi je očigledan: pozivalac nije prijavljen.
+ *
+ * Drugi je tiši. `auth.getUser()` usput osveži istekli token i upiše nove
+ * kolačiće. Ako taj upis padne, server ima važeću sesiju, a pregledač staru:
+ * izmena bi se upisala, a sledeći zahtev bi vlasnika izbacio na prijavu i
+ * izgledalo bi kao da ništa nije sačuvano. Još gore, osvežavanjem je stari
+ * `refresh_token` već potrošen. Zato se pita **pre** izmene: bolje odbijena
+ * izmena koju vlasnik ponovi nego upisana izmena za koju misli da je nema.
+ *
+ * Kolačići se gledaju prvi jer su tačniji opis kad su u pitanju: sesija
+ * postoji, samo nije sačuvana. Neprijavljen posetilac nema šta da osveži, pa
+ * kod njega ova grana ne može da bude tačna.
+ *
+ * Poruka je ista jer je potez isti — prijavi se ponovo pa sačuvaj. `reason`
+ * postoji zbog loga, ne zbog ekrana: razlog pada sesije nije za prikaz.
+ */
+export function sessionDenial(input: {
+  signedIn: boolean;
+  cookiesPersisted: boolean;
+}): SessionDenial | null {
+  if (!input.cookiesPersisted) {
+    return { message: SESSION_GONE, reason: "kolacici" };
+  }
+
+  if (!input.signedIn) {
+    return { message: SESSION_GONE, reason: "bez-prijave" };
+  }
+
+  return null;
+}
+
 let stamps = 0;
 
 /** Rastući pečat odgovora. Ne mora da bude slučajan, mora da bude različit. */
@@ -203,6 +241,39 @@ export function validateRule(input: {
   }
 
   return { ok: true, value: { amountMinor, dayOfMonth, remindDays, active: input.active } };
+}
+
+export type RuleFieldValues = {
+  ruleId: string;
+  amount: string;
+  day: string;
+  remind: string;
+  active: boolean;
+};
+
+/**
+ * Identitet polja jednog ponavljanja u React stablu.
+ *
+ * Polja su kontrolisana, pa im vrednost živi u React stanju i preživi ponovno
+ * iscrtavanje. To je tačno ono što treba kad vlasnik popravlja odbijen unos, i
+ * tačno ono što ne valja kad server u međuvremenu sam ugasi pravilo —
+ * arhiviranje kategorije (`categories_archive_rules`) i uklanjanje člana
+ * (`memberships_deactivate_rules`) to rade kroz okidače, bez ijednog klika na
+ * ovoj strani. Prekidač bi tada ostao na „uključeno“ i sledeće čuvanje bi
+ * pokušalo da oživi pravilo koje baza više ne prima.
+ *
+ * Ključ zato nosi i `id` i svaku vrednost koju server šalje. Čim se bilo koja
+ * promeni, React odbaci staro stanje i polja krenu od onoga što baza kaže.
+ * `id` je u ključu da dva pravila nikad ne razmene stanje.
+ */
+export function ruleFieldsKey(values: RuleFieldValues): string {
+  return JSON.stringify([
+    values.ruleId,
+    values.amount,
+    values.day,
+    values.remind,
+    values.active,
+  ]);
 }
 
 // ----------------------------------------------------------------

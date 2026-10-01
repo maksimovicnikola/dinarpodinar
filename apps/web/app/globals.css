@@ -293,6 +293,57 @@ a:hover {
   max-width: 8rem;
 }
 
+.input--narrow {
+  max-width: 13rem;
+}
+
+/* Prekidač ponavljanja: kvadratić i natpis u istom redu upisa. */
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+}
+
+.check__box {
+  flex: none;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  margin: 0;
+  margin-block-start: 0.1875rem;
+  accent-color: var(--cobalt);
+}
+
+.check__text {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.check__label {
+  font-weight: 500;
+}
+
+/* Uvučena grupa polja koja postoji samo uz uključeno ponavljanje. */
+.group {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 1rem;
+  background: var(--paper-tint);
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--rule-ink);
+  border-radius: var(--radius);
+}
+
+.group__legend {
+  padding-inline: 0.375rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-soft);
+}
+
 /* ---------- Dugmad ---------- */
 
 .button {

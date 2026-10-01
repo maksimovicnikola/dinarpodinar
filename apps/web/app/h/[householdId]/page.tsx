@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { Notice } from "@/components/form";
 import { Passbook, PassbookHeader, Ruler } from "@/components/passbook";
+import { Problem } from "@/components/problem";
 import {
   buildEntryList,
   buildMonthNav,
@@ -22,22 +23,6 @@ import { createServerComponentSupabase } from "@/lib/supabase/server";
 import { LiveEntries } from "./live";
 
 type SearchParams = Record<string, string | string[] | undefined>;
-
-function Problem({ title, lead, children }: { title: string; lead: string; children: string }) {
-  return (
-    <Passbook>
-      <PassbookHeader eyebrow="Zastoj" title={title} lead={lead} />
-      <div className="stack stack--loose">
-        <Notice tone="bad">{children}</Notice>
-        <div className="row">
-          <a className="button button--quiet" href="/">
-            Na početnu
-          </a>
-        </div>
-      </div>
-    </Passbook>
-  );
-}
 
 export default async function MonthPage({
   params,

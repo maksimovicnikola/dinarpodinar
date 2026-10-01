@@ -7,6 +7,8 @@
     "test:smoke": "vitest run tests/domain-external-consumer-smoke.test.ts",
     "test:packages": "pnpm -r --filter \"./packages/*\" test",
     "test:rls": "vitest run supabase/tests/rls.test.ts",
+    "test:entry-rpc": "vitest run supabase/tests/entry-rpc.test.ts",
+    "test:db": "pnpm run test:rls && pnpm run test:entry-rpc",
     "test:month-key": "vitest run supabase/tests/month-key.test.ts",
     "test:sql": "vitest run supabase/tests/migration-invariants.test.ts",
     "typecheck": "pnpm run typecheck:root && pnpm run typecheck:packages",

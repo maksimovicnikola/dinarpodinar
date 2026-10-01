@@ -7,16 +7,25 @@
  * privilegije nisu samo aditivne povrh Supabase podrazumevanih grantova.
  */
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const migrationPath = fileURLToPath(
-  new URL("../migrations/20260930120000_finance.sql", import.meta.url),
-);
+const migrationsDir = fileURLToPath(new URL("../migrations", import.meta.url));
+
+/**
+ * Sve migracije, redom primene. Nova migracija je pokrivena bez dopune testa —
+ * inače bi dodatna RPC funkcija mogla da prođe bez `search_path` i bez revoke-a.
+ */
+const migrationFiles = readdirSync(migrationsDir)
+  .filter((entry) => entry.endsWith(".sql"))
+  .sort();
 
 /** SQL bez komentara — da `--` linije ne lažu regex proveram ispod. */
-const sql = readFileSync(migrationPath, "utf8")
+const sql = migrationFiles
+  .map((file) => readFileSync(join(migrationsDir, file), "utf8"))
+  .join("\n")
   .split("\n")
   .map((line) => line.replace(/--.*$/, ""))
   .join("\n");
@@ -92,5 +101,53 @@ describe("pozivnice", () => {
 describe("kategorije", () => {
   it("limit postoji samo za trošak", () => {
     expect(sql).toMatch(/limit_minor is null or kind = 'expense'/);
+  });
+});
+
+describe("skup migracija", () => {
+  it("pretraga nalazi migracije (inače test ništa ne bi proveravao)", () => {
+    expect(migrationFiles.length).toBeGreaterThan(0);
+    expect(createdTables().length).toBeGreaterThan(0);
+    expect(functionHeaders().length).toBeGreaterThan(0);
+  });
+});
+
+describe("atomičan unos sa ponavljanjem", () => {
+  it("funkcija postoji i radi oba upisa", () => {
+    expect(sql).toMatch(/create or replace function public\.create_entry_with_rule/);
+    expect(sql).toMatch(
+      /create or replace function public\.create_entry_with_rule[\s\S]*?insert into public\.recurring_rules[\s\S]*?insert into public\.entries[\s\S]*?\$\$;/,
+    );
+  });
+
+  it("proverava sesiju i članstvo, jer security definer zaobilazi RLS", () => {
+    const body = /create or replace function public\.create_entry_with_rule[\s\S]*?\$\$;/.exec(sql)?.[0] ?? "";
+    expect(body).toMatch(/security definer/);
+    expect(body).toMatch(/auth\.uid\(\) is null/);
+    expect(body).toMatch(/not public\.is_member\(p_household_id\)/);
+  });
+
+  it("execute dobija samo authenticated", () => {
+    expect(sql).toMatch(
+      /revoke execute on function public\.create_entry_with_rule\([^)]*\)\s*from public, anon;/,
+    );
+    expect(sql).toMatch(
+      /grant\s+execute on function public\.create_entry_with_rule\([^)]*\)\s*to authenticated;/,
+    );
+    expect(sql).not.toMatch(
+      /grant[^;]*execute on function public\.create_entry_with_rule[^;]*service_role/,
+    );
+  });
+
+  it("ne menja nijedan postojeći javni potpis", () => {
+    for (const signature of [
+      "public.create_household(text, text)",
+      "public.accept_invitation(uuid)",
+      "public.is_member(uuid)",
+      "public.is_owner(uuid)",
+    ]) {
+      const escaped = signature.replace(/[.()]/g, "\\$&");
+      expect(new RegExp(`grant\\s+execute on function ${escaped}`).test(sql), signature).toBe(true);
+    }
   });
 });

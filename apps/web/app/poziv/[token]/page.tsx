@@ -4,7 +4,7 @@ import { Notice } from "@/components/form";
 import { Passbook, PassbookHeader } from "@/components/passbook";
 import { invitationErrorMessage } from "@/lib/auth-messages";
 import { invitationToken, loginPathWithNext } from "@/lib/next-path";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerComponentSupabase } from "@/lib/supabase/server";
 
 import { AcceptForm } from "./accept-form";
 
@@ -36,7 +36,7 @@ export default async function InvitationPage({
     );
   }
 
-  const supabase = await createServerSupabase();
+  const supabase = await createServerComponentSupabase();
   const auth = await supabase.auth.getUser();
 
   // Neprijavljen gost prvo ide na prijavu; povratak sa linka vraća ga tačno

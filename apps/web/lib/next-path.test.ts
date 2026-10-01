@@ -4,6 +4,7 @@ import {
   DEFAULT_NEXT_PATH,
   firstParam,
   invitationToken,
+  isPublicPath,
   loginPathWithNext,
   nextPathOrDefault,
   safeNextPath,
@@ -144,6 +145,45 @@ describe("invitationToken", () => {
     expect(invitationToken("")).toBeNull();
     expect(invitationToken(null)).toBeNull();
     expect(invitationToken(undefined)).toBeNull();
+  });
+});
+
+describe("isPublicPath", () => {
+  it("propušta tačno javne strane", () => {
+    expect(isPublicPath("/login")).toBe(true);
+    expect(isPublicPath("/auth")).toBe(true);
+  });
+
+  it("propušta podstrane javnih prefiksa", () => {
+    expect(isPublicPath("/login/")).toBe(true);
+    expect(isPublicPath("/auth/callback")).toBe(true);
+    expect(isPublicPath("/auth/callback/dalje")).toBe(true);
+  });
+
+  it("ne propušta imena koja samo počinju istim slovima", () => {
+    expect(isPublicPath("/loginovi")).toBe(false);
+    expect(isPublicPath("/login-stranica")).toBe(false);
+    expect(isPublicPath("/authori")).toBe(false);
+    expect(isPublicPath("/authentication")).toBe(false);
+  });
+
+  it("ne propušta zaštićene strane", () => {
+    expect(isPublicPath("/")).toBe(false);
+    expect(isPublicPath("/novo")).toBe(false);
+    expect(isPublicPath("/poziv/0f9f6f2a-2c5d-4f6f-9b1a-3b7d8e5c1a22")).toBe(false);
+    expect(isPublicPath("/h/0f9f6f2a-2c5d-4f6f-9b1a-3b7d8e5c1a22")).toBe(false);
+  });
+
+  it("ne propušta ugnježdeni javni prefiks ispod zaštićene strane", () => {
+    expect(isPublicPath("/h/login")).toBe(false);
+    expect(isPublicPath("/novo/auth")).toBe(false);
+  });
+
+  it("javna strana nikad nije i dozvoljeno odredište posle prijave", () => {
+    for (const path of ["/login", "/login/", "/auth", "/auth/callback"]) {
+      expect(isPublicPath(path), path).toBe(true);
+      expect(safeNextPath(path), path).toBeNull();
+    }
   });
 });
 

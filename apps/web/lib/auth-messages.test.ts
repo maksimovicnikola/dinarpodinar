@@ -19,6 +19,7 @@ describe("loginErrorMessage", () => {
     expect(loginErrorMessage("bez-koda")).toMatch(/nije sadržao kod/);
     expect(loginErrorMessage("razmena")).toMatch(/istekao/);
     expect(loginErrorMessage("link")).toMatch(/nije uspela/);
+    expect(loginErrorMessage("kolacici")).toMatch(/kolačiće/);
   });
 
   it("nepoznat kod ne pada, nego traži novi link", () => {
@@ -86,6 +87,7 @@ describe("invitationErrorCode", () => {
       "druga-posta",
       "bez-poste",
       "prijava",
+      "kolacici",
       "nepoznato",
     ] as const;
 

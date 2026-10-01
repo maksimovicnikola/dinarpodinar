@@ -4,11 +4,9 @@ import { redirect } from "next/navigation";
 
 import { invitationErrorCode, invitationErrorMessage } from "@/lib/auth-messages";
 import { invitationToken, loginPathWithNext } from "@/lib/next-path";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createWritableServerSupabase } from "@/lib/supabase/server";
 
-export type InvitationState = { error: string | null };
-
-export const emptyInvitationState: InvitationState = { error: null };
+import type { InvitationState } from "./state";
 
 /**
  * Prihvatanje pozivnice je promena stanja, pa ide kroz akciju a ne kroz
@@ -17,6 +15,9 @@ export const emptyInvitationState: InvitationState = { error: null };
  *
  * Akcija je javna ulazna tačka, pa se token i prijava proveravaju ponovo —
  * ne verujemo onome što je strana već proverila.
+ *
+ * Modul sme da izvozi samo async funkcije; tip i početno stanje forme stoje u
+ * `./state`. Čuvar je `lib/server-actions.test.ts`.
  */
 export async function acceptInvitationAction(
   _previous: InvitationState,
@@ -28,7 +29,7 @@ export async function acceptInvitationAction(
     return { error: invitationErrorMessage("token") };
   }
 
-  const supabase = await createServerSupabase();
+  const { supabase, cookieFailure } = await createWritableServerSupabase();
   const auth = await supabase.auth.getUser();
 
   if (!auth.data.user) {
@@ -39,6 +40,14 @@ export async function acceptInvitationAction(
 
   if (accepted.error) {
     return { error: invitationErrorMessage(invitationErrorCode(accepted.error.message)) };
+  }
+
+  // Osvežen token je mogao da padne pri upisu. Prećutati to znači poslati člana
+  // u domaćinstvo bez sesije, pa bi ga sledeći zahtev vratio na prijavu.
+  const failure = cookieFailure();
+  if (failure) {
+    console.error("accept_invitation: upis kolačića sesije nije uspeo", failure);
+    return { error: invitationErrorMessage("kolacici") };
   }
 
   if (!accepted.data) {

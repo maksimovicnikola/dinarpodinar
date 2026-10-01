@@ -2,19 +2,23 @@ import { redirect } from "next/navigation";
 
 import { Notice } from "@/components/form";
 import { Passbook, PassbookHeader } from "@/components/passbook";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerComponentSupabase } from "@/lib/supabase/server";
 
 export default async function HomePage() {
-  const supabase = await createServerSupabase();
+  const supabase = await createServerComponentSupabase();
   const auth = await supabase.auth.getUser();
 
   if (!auth.data.user) {
     redirect("/login");
   }
 
+  // `user_id` se traži izričito. RLS na `memberships` propušta i redove
+  // sadomaćinskih članova, pa bi upit bez ovog filtera mogao da vrati tuđe
+  // članstvo i odvede korisnika u pogrešno domaćinstvo.
   const membership = await supabase
     .from("memberships")
     .select("household_id")
+    .eq("user_id", auth.data.user.id)
     .order("household_id", { ascending: true })
     .limit(1)
     .maybeSingle();

@@ -5,7 +5,8 @@ import { useActionState } from "react";
 import { Notice } from "@/components/form";
 import { SubmitButton } from "@/components/submit-button";
 
-import { acceptInvitationAction, emptyInvitationState } from "./actions";
+import { acceptInvitationAction } from "./actions";
+import { emptyInvitationState } from "./state";
 
 export function AcceptForm({ token }: { token: string }) {
   const [state, action] = useActionState(acceptInvitationAction, emptyInvitationState);

@@ -18,6 +18,14 @@ export default function NewHouseholdPage() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    // Zaključano ostaje do kraja: `router.push` ne ruši ovu komponentu odmah,
+    // pa bi otključavanje posle uspeha pustilo drugi klik da otvori još jedno
+    // domaćinstvo. Otključava se samo kad poziv padne.
+    if (pending) {
+      return;
+    }
+
     setError(null);
 
     // Baza odbija prazan naziv i valutu van `^[A-Z]{3}$`. Proveravamo pre poziva
@@ -45,13 +53,13 @@ export default function NewHouseholdPage() {
 
       if (created.error || !created.data) {
         setError(createHouseholdErrorMessage(created.error?.message));
+        setPending(false);
         return;
       }
 
       router.push(`/h/${created.data}`);
     } catch (caught) {
       setError(createHouseholdErrorMessage(caught instanceof Error ? caught.message : null));
-    } finally {
       setPending(false);
     }
   }

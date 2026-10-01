@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { DEFAULT_NEXT_PATH, nextPathOrDefault } from "@/lib/next-path";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { loginErrorPath, planCallback } from "@/lib/auth-callback";
+import { createWritableServerSupabase, isImmutableCookieError } from "@/lib/supabase/server";
 
 /** Odgovor sa kolačićima sesije ne sme da uđe u keš posrednika. */
 function redirectTo(path: string, origin: string) {
@@ -13,25 +13,41 @@ function redirectTo(path: string, origin: string) {
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
 
-  // `next` sastavlja korisnik, pa prolazi kroz proveru: samo relativna putanja
-  // na istom poreklu. Bez toga je ovo otvoreno preusmerenje.
-  const next = nextPathOrDefault(url.searchParams.get("next"), DEFAULT_NEXT_PATH);
+  // Grananje po adresi (uključujući proveru `next` od otvorenog preusmerenja)
+  // stoji u `planCallback` i testirano je odvojeno.
+  const plan = planCallback(url.searchParams);
 
-  if (url.searchParams.get("error") ?? url.searchParams.get("error_description")) {
-    return redirectTo("/login?greska=link", url.origin);
+  if (plan.kind === "fail") {
+    return redirectTo(loginErrorPath(plan.code), url.origin);
   }
 
-  const code = url.searchParams.get("code");
-  if (!code) {
-    return redirectTo("/login?greska=bez-koda", url.origin);
+  const { supabase, cookieFailure } = await createWritableServerSupabase();
+
+  try {
+    const { error } = await supabase.auth.exchangeCodeForSession(plan.code);
+
+    if (error) {
+      return redirectTo(loginErrorPath("razmena"), url.origin);
+    }
+  } catch (caught) {
+    // `supabase-js` propušta grešku iz upisa kolačića nazad kroz razmenu.
+    // Razdvajamo je od neuspele razmene da poruka članu bude tačna.
+    if (cookieFailure() || isImmutableCookieError(caught)) {
+      console.error("auth/callback: upis kolačića sesije nije uspeo", caught);
+      return redirectTo(loginErrorPath("kolacici"), url.origin);
+    }
+
+    console.error("auth/callback: razmena koda nije uspela", caught);
+    return redirectTo(loginErrorPath("razmena"), url.origin);
   }
 
-  const supabase = await createServerSupabase();
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-  if (error) {
-    return redirectTo("/login?greska=razmena", url.origin);
+  // Razmena je prošla, ali kolačić nije upisan: sesija ne postoji, pa
+  // preusmerenje u aplikaciju samo vrti korisnika natrag na prijavu.
+  const failure = cookieFailure();
+  if (failure) {
+    console.error("auth/callback: upis kolačića sesije nije uspeo", failure);
+    return redirectTo(loginErrorPath("kolacici"), url.origin);
   }
 
-  return redirectTo(next, url.origin);
+  return redirectTo(plan.next, url.origin);
 }

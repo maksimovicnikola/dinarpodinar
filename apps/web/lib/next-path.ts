@@ -16,7 +16,27 @@ const ALLOWED_PATH = /^\/[A-Za-z0-9\-._~!$&'()*+,;=:@/%?#[\]]*$/;
 /** Putanje koje nikad nisu odredište posle prijave — inače se pravi petlja. */
 const BLOCKED_PREFIXES = ["/login", "/auth"];
 
+/**
+ * Strane koje se otvaraju bez prijave. Spisak je namerno odvojen od
+ * `BLOCKED_PREFIXES`: danas su iste, ali „javno" i „nije odredište posle
+ * prijave" nisu isto pravilo i ne smeju da se menjaju zajedno.
+ */
+const PUBLIC_PREFIXES = ["/login", "/auth"];
+
 export const DEFAULT_NEXT_PATH = "/";
+
+/**
+ * Poređenje po segmentu, ne po golom prefiksu: `/login` i `/login/x` se
+ * poklapaju, a `/loginovi` ne.
+ */
+function matchesPrefix(pathname: string, prefixes: readonly string[]): boolean {
+  return prefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+/** Da li strana sme da se otvori bez prijave. Koristi ga `proxy.ts`. */
+export function isPublicPath(pathname: string): boolean {
+  return matchesPrefix(pathname, PUBLIC_PREFIXES);
+}
 
 /**
  * Vraća putanju ako je sigurna za preusmerenje unutar iste aplikacije,
@@ -48,10 +68,8 @@ export function safeNextPath(raw: string | null | undefined): string | null {
   }
 
   const pathOnly = value.split(/[?#]/)[0] ?? "";
-  for (const blocked of BLOCKED_PREFIXES) {
-    if (pathOnly === blocked || pathOnly.startsWith(`${blocked}/`)) {
-      return null;
-    }
+  if (matchesPrefix(pathOnly, BLOCKED_PREFIXES)) {
+    return null;
   }
 
   return value;

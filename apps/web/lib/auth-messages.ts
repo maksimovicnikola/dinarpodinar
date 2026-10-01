@@ -7,7 +7,7 @@
  * a tekst baze nije za prikaz.
  */
 
-export type LoginErrorCode = "bez-koda" | "razmena" | "link" | "nepoznato";
+export type LoginErrorCode = "bez-koda" | "razmena" | "link" | "kolacici" | "nepoznato";
 
 export function loginErrorMessage(code: string | null | undefined): string | null {
   switch (code) {
@@ -21,6 +21,8 @@ export function loginErrorMessage(code: string | null | undefined): string | nul
       return "Link za prijavu je istekao ili je već iskorišćen. Pošaljite novi.";
     case "link":
       return "Prijava preko linka nije uspela. Pošaljite novi link.";
+    case "kolacici":
+      return "Prijava nije sačuvana jer pregledač nije primio kolačiće. Dozvolite kolačiće za ovu stranu pa pošaljite novi link.";
     default:
       return "Prijava nije uspela. Pošaljite novi link.";
   }
@@ -57,6 +59,7 @@ export type InvitationErrorCode =
   | "druga-posta"
   | "bez-poste"
   | "prijava"
+  | "kolacici"
   | "nepoznato";
 
 /** Svodi tekst greške iz `accept_invitation` na stabilan kod. */
@@ -110,6 +113,8 @@ export function invitationErrorMessage(code: string | null | undefined): string 
       return "Nalog nema adresu e-pošte, pa pozivnica ne može da se prihvati.";
     case "prijava":
       return "Prijava je istekla. Prijavite se ponovo pa otvorite pozivnicu.";
+    case "kolacici":
+      return "Pozivnica je prihvaćena, ali sesija nije sačuvana. Prijavite se ponovo pa otvorite početnu stranu.";
     default:
       return "Pozivnica nije prihvaćena. Pokušajte ponovo ili zamolite vlasnika za novu.";
   }

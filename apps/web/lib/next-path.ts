@@ -96,14 +96,22 @@ export function loginPathWithNext(raw: string | null | undefined): string {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-/** Token pozivnice je `uuid` u bazi; normalizuje se na mala slova ili se odbija. */
-export function invitationToken(raw: string | null | undefined): string | null {
+/**
+ * Identifikator iz adrese koji ide u `uuid` kolonu. Postgres na neispravan
+ * tekst vraća grešku tipa (22P02), pa se oblik proverava pre upita.
+ */
+export function uuidParam(raw: string | null | undefined): string | null {
   if (typeof raw !== "string") {
     return null;
   }
 
   const value = raw.trim().toLowerCase();
   return UUID.test(value) ? value : null;
+}
+
+/** Token pozivnice je `uuid` u bazi; normalizuje se na mala slova ili se odbija. */
+export function invitationToken(raw: string | null | undefined): string | null {
+  return uuidParam(raw);
 }
 
 /** Prvi skalar iz `searchParams`, koji u Next-u može biti i niz. */

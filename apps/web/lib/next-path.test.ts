@@ -8,6 +8,7 @@ import {
   loginPathWithNext,
   nextPathOrDefault,
   safeNextPath,
+  uuidParam,
 } from "./next-path";
 
 /** Unosi koji pokušavaju da izvedu korisnika sa našeg porekla. */
@@ -145,6 +146,22 @@ describe("invitationToken", () => {
     expect(invitationToken("")).toBeNull();
     expect(invitationToken(null)).toBeNull();
     expect(invitationToken(undefined)).toBeNull();
+  });
+});
+
+describe("uuidParam", () => {
+  it("prihvata uuid iz putanje domaćinstva", () => {
+    expect(uuidParam("42CCBD1F-1D87-4645-B2DB-8CAF65F88D66")).toBe(
+      "42ccbd1f-1d87-4645-b2db-8caf65f88d66",
+    );
+  });
+
+  it("odbija vrednosti koje bi Postgres odbio kao `uuid`", () => {
+    expect(uuidParam("nije-uuid")).toBeNull();
+    expect(uuidParam("1; drop table entries")).toBeNull();
+    expect(uuidParam("42ccbd1f1d874645b2db8caf65f88d66")).toBeNull();
+    expect(uuidParam("")).toBeNull();
+    expect(uuidParam(undefined)).toBeNull();
   });
 });
 

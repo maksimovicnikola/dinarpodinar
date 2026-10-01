@@ -1,4 +1,27 @@
-import { assertPositiveMinor, type CategorySnapshot, type EntrySnapshot } from "@finance/domain";
+import {
+  assertPositiveMinor,
+  type CategorySnapshot,
+  type EntryKind,
+  type EntrySnapshot,
+} from "@finance/domain";
+
+/** Kategorija sa zastavicom arhive: istorija je i dalje prikazuje, nov unos ne. */
+export type CategoryRow = CategorySnapshot & { archived: boolean };
+
+/** Unos sa poljima koja domenu ne trebaju, ali se vide u listi meseca. */
+export type EntryDetail = EntrySnapshot & { note: string; recurringRuleId: string | null };
+
+/** Ponavljajuće pravilo bez imena — naziv kategorije i osobe se traže u pregledu. */
+export type RecurringSnapshot = {
+  id: string;
+  kind: EntryKind;
+  amountMinor: number;
+  categoryId: string;
+  personId: string;
+  note: string;
+  dayOfMonth: number;
+  remindDays: number;
+};
 
 export function toCategorySnapshot(row: {
   id: string;
@@ -7,6 +30,16 @@ export function toCategorySnapshot(row: {
   limit_minor: number | null;
 }): CategorySnapshot {
   return { id: row.id, name: row.name, kind: row.kind, limitMinor: row.limit_minor };
+}
+
+export function toCategoryRow(row: {
+  id: string;
+  name: string;
+  kind: "expense" | "income";
+  limit_minor: number | null;
+  archived: boolean;
+}): CategoryRow {
+  return { ...toCategorySnapshot(row), archived: row.archived };
 }
 
 export function toEntrySnapshot(row: {
@@ -26,6 +59,46 @@ export function toEntrySnapshot(row: {
     personId: row.person_id,
     personName: row.person_name,
     occurredOn: row.occurred_on,
+  };
+}
+
+export function toEntryDetail(row: {
+  id: string;
+  kind: "expense" | "income";
+  amount_minor: number;
+  category_id: string;
+  person_id: string;
+  person_name: string;
+  occurred_on: string;
+  note: string | null;
+  recurring_rule_id: string | null;
+}): EntryDetail {
+  return {
+    ...toEntrySnapshot(row),
+    note: row.note ?? "",
+    recurringRuleId: row.recurring_rule_id,
+  };
+}
+
+export function toRecurringSnapshot(row: {
+  id: string;
+  kind: "expense" | "income";
+  amount_minor: number;
+  category_id: string;
+  person_id: string;
+  note: string | null;
+  day_of_month: number;
+  remind_days: number;
+}): RecurringSnapshot {
+  return {
+    id: row.id,
+    kind: row.kind,
+    amountMinor: row.amount_minor,
+    categoryId: row.category_id,
+    personId: row.person_id,
+    note: row.note ?? "",
+    dayOfMonth: row.day_of_month,
+    remindDays: row.remind_days,
   };
 }
 

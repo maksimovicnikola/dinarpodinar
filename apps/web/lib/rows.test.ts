@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { canManage, majorToMinor, toCategorySnapshot, toEntrySnapshot } from "./rows";
+import {
+  canManage,
+  majorToMinor,
+  toCategoryRow,
+  toCategorySnapshot,
+  toEntryDetail,
+  toEntrySnapshot,
+  toRecurringSnapshot,
+} from "./rows";
 
 describe("rows", () => {
   it("preslikava kategoriju i unos u domenske tipove", () => {
@@ -115,5 +123,84 @@ describe("rows", () => {
     expect(() => majorToMinor("00,50")).toThrow(/pozitivan/);
     expect(() => majorToMinor("01")).toThrow(/pozitivan/);
     expect(() => majorToMinor("00")).toThrow(/pozitivan/);
+  });
+
+  it("nosi zastavicu arhive uz kategoriju", () => {
+    expect(
+      toCategoryRow({
+        id: "c1",
+        name: "Plata",
+        kind: "income",
+        limit_minor: null,
+        archived: true,
+      }),
+    ).toEqual({ id: "c1", name: "Plata", kind: "income", limitMinor: null, archived: true });
+  });
+
+  it("unos za listu nosi belešku i vezu ka pravilu", () => {
+    expect(
+      toEntryDetail({
+        id: "e1",
+        kind: "expense",
+        amount_minor: 125000,
+        category_id: "c1",
+        person_id: "p1",
+        person_name: "Ana",
+        occurred_on: "2026-09-30",
+        note: "pijaca",
+        recurring_rule_id: "r1",
+      }),
+    ).toEqual({
+      id: "e1",
+      kind: "expense",
+      amountMinor: 125000,
+      categoryId: "c1",
+      personId: "p1",
+      personName: "Ana",
+      occurredOn: "2026-09-30",
+      note: "pijaca",
+      recurringRuleId: "r1",
+    });
+  });
+
+  it("prazna beleška iz baze postaje prazna niska, ne null", () => {
+    const row = toEntryDetail({
+      id: "e1",
+      kind: "income",
+      amount_minor: 100,
+      category_id: "c1",
+      person_id: "p1",
+      person_name: "Ana",
+      occurred_on: "2026-09-30",
+      note: null,
+      recurring_rule_id: null,
+    });
+
+    expect(row.note).toBe("");
+    expect(row.recurringRuleId).toBeNull();
+  });
+
+  it("preslikava ponavljajuće pravilo", () => {
+    expect(
+      toRecurringSnapshot({
+        id: "r1",
+        kind: "expense",
+        amount_minor: 500000,
+        category_id: "c1",
+        person_id: "p1",
+        note: null,
+        day_of_month: 31,
+        remind_days: 3,
+      }),
+    ).toEqual({
+      id: "r1",
+      kind: "expense",
+      amountMinor: 500000,
+      categoryId: "c1",
+      personId: "p1",
+      note: "",
+      dayOfMonth: 31,
+      remindDays: 3,
+    });
   });
 });

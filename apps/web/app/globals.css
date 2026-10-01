@@ -170,6 +170,15 @@ a:hover {
   padding: clamp(1.25rem, 4vw, 2.25rem);
 }
 
+/* Više knjižičnih strana jedna ispod druge: mesec, trake, dospeća, unosi. */
+.passbook + .passbook {
+  margin-top: clamp(1rem, 3vw, 1.5rem);
+}
+
+.passbook > h2 {
+  margin-bottom: 0.25rem;
+}
+
 .passbook__head {
   display: grid;
   gap: 0.5rem;
@@ -353,6 +362,239 @@ a:hover {
 .notice--good {
   color: var(--stamp-good);
   background: var(--stamp-good-bg);
+}
+
+/* ---------- Mesečni pregled ---------- */
+
+/* Prebacivači meseca i osobe: redovi upisa, ne dugmad. */
+.switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.switch__item {
+  color: var(--ink-soft);
+  text-decoration: none;
+  padding-block: 0.375rem;
+  border-bottom: 2px solid transparent;
+}
+
+.switch__item[href]:hover {
+  color: var(--ink-strong);
+  border-bottom-color: var(--rule-ink);
+}
+
+.switch__item[href]:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+}
+
+.switch__item--on {
+  color: var(--ink-strong);
+  font-weight: 500;
+  border-bottom-color: var(--ink);
+}
+
+/* Tri zbira meseca. Ostatak je zaključni red, pa stoji odvojeno. */
+.totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem 1.5rem;
+  margin: 0;
+}
+
+.totals__cell {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.totals__cell dt {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-soft);
+}
+
+.totals__cell dd {
+  margin: 0;
+  font-size: 1.25rem;
+  white-space: nowrap;
+}
+
+.totals__cell--sum dd {
+  font-size: clamp(1.375rem, 1.1rem + 1vw, 1.75rem);
+  font-weight: 500;
+}
+
+.alerts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.amount--short {
+  color: var(--stamp-bad);
+}
+
+.amount--in {
+  color: var(--stamp-good);
+}
+
+/* Rečenica predloga je jedini tekst koji nosi zaključak. */
+.verdict {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 1.125rem;
+  color: var(--ink-strong);
+  max-width: 44ch;
+}
+
+/* ---------- Trake kategorija ---------- */
+
+.bars,
+.ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+
+.bars {
+  gap: 0.875rem;
+  margin-top: 1rem;
+}
+
+.bar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+}
+
+.bar__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-weight: 500;
+}
+
+.bar__amount {
+  font-size: 0.875rem;
+}
+
+.bar__track {
+  grid-column: 1 / -1;
+  display: block;
+  block-size: 10px;
+  background: var(--cobalt-wash);
+  border: 1px solid var(--rule);
+  border-radius: 1px;
+}
+
+.bar__fill {
+  display: block;
+  block-size: 100%;
+  background: var(--cobalt);
+}
+
+.bar__track--over {
+  background: var(--stamp-bad-bg);
+  border-color: color-mix(in srgb, var(--stamp-bad) 35%, transparent);
+}
+
+.bar__track--over .bar__fill {
+  background: var(--stamp-bad);
+}
+
+/* Kategorija bez limita: traka je samo mera potrošnje, ne odnos prema limitu. */
+.bar__track--free .bar__fill {
+  background: color-mix(in srgb, var(--ink-soft) 45%, transparent);
+}
+
+/* ---------- Spisak unosa i dospeća ---------- */
+
+.ledger {
+  margin-top: 1rem;
+  border-top: 1px solid var(--rule);
+}
+
+.ledger__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.125rem 0.875rem;
+  align-items: baseline;
+  padding-block: 0.625rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.ledger__date {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.ledger__body {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.ledger__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-weight: 500;
+}
+
+.ledger__amount {
+  text-align: end;
+  white-space: nowrap;
+}
+
+.ledger__edit {
+  grid-column: 2 / -1;
+  justify-self: end;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.tag {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.625rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 0.125rem 0.375rem;
+  border: 1px solid var(--rule-ink);
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.tag--good {
+  color: var(--stamp-good);
+  background: var(--stamp-good-bg);
+  border-color: color-mix(in srgb, var(--stamp-good) 35%, transparent);
+}
+
+@media (max-width: 30rem) {
+  .ledger__row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .ledger__date {
+    grid-column: 1 / -1;
+  }
 }
 
 .sr-only {

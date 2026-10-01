@@ -59,6 +59,9 @@ export type InvitationErrorCode =
   | "druga-posta"
   | "bez-poste"
   | "prijava"
+  // Dva koda za kolačiće, jer poruka zavisi od toga da li je pozivnica već
+  // potrošena: `kolacici-pre` je pad pre prihvatanja, `kolacici` posle.
+  | "kolacici-pre"
   | "kolacici"
   | "nepoznato";
 
@@ -113,6 +116,8 @@ export function invitationErrorMessage(code: string | null | undefined): string 
       return "Nalog nema adresu e-pošte, pa pozivnica ne može da se prihvati.";
     case "prijava":
       return "Prijava je istekla. Prijavite se ponovo pa otvorite pozivnicu.";
+    case "kolacici-pre":
+      return "Sesija nije sačuvana jer pregledač nije primio kolačiće. Pozivnica nije iskorišćena — dozvolite kolačiće za ovu stranu pa ponovo otvorite link.";
     case "kolacici":
       return "Pozivnica je prihvaćena, ali sesija nije sačuvana. Prijavite se ponovo pa otvorite početnu stranu.";
     default:

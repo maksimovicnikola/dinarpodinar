@@ -87,6 +87,7 @@ describe("invitationErrorCode", () => {
       "druga-posta",
       "bez-poste",
       "prijava",
+      "kolacici-pre",
       "kolacici",
       "nepoznato",
     ] as const;
@@ -94,6 +95,13 @@ describe("invitationErrorCode", () => {
     for (const code of codes) {
       expect(invitationErrorMessage(code), code).toBeTruthy();
     }
+  });
+
+  it("razdvaja pad kolačića pre i posle prihvatanja", () => {
+    // Pozivnica je jednokratna, pa poruka mora da kaže da li je potrošena.
+    expect(invitationErrorMessage("kolacici-pre")).toMatch(/nije iskorišćena/);
+    expect(invitationErrorMessage("kolacici")).toMatch(/prihvaćena/);
+    expect(invitationErrorMessage("kolacici-pre")).not.toBe(invitationErrorMessage("kolacici"));
   });
 
   it("bez koda nema poruke", () => {

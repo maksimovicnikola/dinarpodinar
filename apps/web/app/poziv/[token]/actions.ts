@@ -32,6 +32,18 @@ export async function acceptInvitationAction(
   const { supabase, cookieFailure } = await createWritableServerSupabase();
   const auth = await supabase.auth.getUser();
 
+  // Prvo kolačići, pa tek onda prijava i RPC. `getUser` osvežava token, a
+  // `setAll` neuspeh upisa ne baca dalje (vidi `lib/supabase/server.ts`), pa bi
+  // se bez ove provere pozivnica potrošila i članstvo upisalo uz sesiju koja
+  // nije sačuvana — pozvani bi video grešku, a pozivnica bi bila iskorišćena.
+  // Zato ide i pre preusmerenja na prijavu: ponovna prijava bi pala na isti
+  // pregledač i isti upis.
+  const beforeAccepting = cookieFailure();
+  if (beforeAccepting) {
+    console.error("accept_invitation: sesija nije upisana u kolačiće", beforeAccepting);
+    return { error: invitationErrorMessage("kolacici-pre") };
+  }
+
   if (!auth.data.user) {
     redirect(loginPathWithNext(`/poziv/${token}`));
   }
@@ -42,11 +54,12 @@ export async function acceptInvitationAction(
     return { error: invitationErrorMessage(invitationErrorCode(accepted.error.message)) };
   }
 
-  // Osvežen token je mogao da padne pri upisu. Prećutati to znači poslati člana
-  // u domaćinstvo bez sesije, pa bi ga sledeći zahtev vratio na prijavu.
-  const failure = cookieFailure();
-  if (failure) {
-    console.error("accept_invitation: upis kolačića sesije nije uspeo", failure);
+  // Isti klijent je mogao da osveži token i tokom RPC-a. Prećutati to znači
+  // poslati člana u domaćinstvo bez sesije, pa bi ga sledeći zahtev vratio na
+  // prijavu. Pozivnica je ovde već potrošena, zato druga poruka.
+  const afterAccepting = cookieFailure();
+  if (afterAccepting) {
+    console.error("accept_invitation: upis kolačića sesije nije uspeo", afterAccepting);
     return { error: invitationErrorMessage("kolacici") };
   }
 

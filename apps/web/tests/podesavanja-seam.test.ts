@@ -108,6 +108,10 @@ const {
   saveRuleAction,
 } = await import("@/app/h/[householdId]/podesavanja/actions");
 
+// Prihvatanje pozivnice deli isti klijent i isti upis kolačića, pa pad upisa
+// mora i tamo da zaustavi posao — tamo je posledica teža, jer je RPC jednokratan.
+const { acceptInvitationAction } = await import("@/app/poziv/[token]/actions");
+
 const runStamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const createdUserIds: string[] = [];
 const createdHouseholdIds: string[] = [];
@@ -1376,6 +1380,72 @@ describe("izmena ne prolazi ako osvežena sesija nije upisana u kolačiće", () 
     // Razlog je završio u logu, a ne na ekranu.
     expect(diagnostics.some((line) => line.includes("nije upisana u kolačiće"))).toBe(true);
     expect(state.message).not.toContain("kolačić");
+  });
+
+  /**
+   * Isto pravilo za prihvatanje pozivnice, ali sa težom posledicom:
+   * `accept_invitation` je jednokratan. Pozivnica potrošena uz sesiju koja
+   * nije sačuvana ne može da se vrati, pa provera stoji pre RPC-a.
+   */
+  it("pozivnica se ne potroši kad sesija nije upisana u kolačiće", async () => {
+    const pozvani = await signUp("pod-kolacici-pozvani", "Pozvani");
+
+    const invite = await api(vlasnik.token)
+      .from("invitations")
+      .insert({ household_id: domE, email: pozvani.email })
+      .select("id, token")
+      .single();
+    if (invite.error) throw invite.error;
+
+    expireSession(pozvani.jar);
+    cookieWriteAttempts = 0;
+
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    let state: { error: string | null };
+    let diagnostics: string[] = [];
+    try {
+      state = await withBrokenCookieWrites(() =>
+        asUser(pozvani, () =>
+          acceptInvitationAction({ error: null }, form({ token: invite.data!.token as string })),
+        ),
+      );
+      diagnostics = logged.mock.calls.map((call) => String(call[0]));
+    } finally {
+      logged.mockRestore();
+    }
+
+    expect(cookieWriteAttempts).toBeGreaterThan(0);
+    expect(state.error).toMatch(/nije iskorišćena/);
+    expect(diagnostics.some((line) => line.includes("nije upisana u kolačiće"))).toBe(true);
+
+    // Dokaz u bazi: pozivnica je i dalje važeća, a članstva nema.
+    const row = (await invitationsOf(domE)).find((item) => item.id === invite.data!.id);
+    expect(row?.used_at).toBeNull();
+    expect(await isMember(domE, pozvani.id)).toBe(false);
+  });
+
+  it("kontrola: sa ispravnim upisom ista pozivnica prolazi", async () => {
+    // Bez ovoga test iznad ne razlikuje nesačuvane kolačiće od loše pozivnice.
+    const pozvani = await signUp("pod-kolacici-prolaz", "Prolaz");
+
+    const invite = await api(vlasnik.token)
+      .from("invitations")
+      .insert({ household_id: domE, email: pozvani.email })
+      .select("id, token")
+      .single();
+    if (invite.error) throw invite.error;
+
+    expireSession(pozvani.jar);
+
+    // Uspeh se završava preusmerenjem, koje Next propušta kao izuzetak.
+    const outcome = await asUser(pozvani, () =>
+      acceptInvitationAction({ error: null }, form({ token: invite.data!.token as string })).catch(
+        (caught: unknown) => caught,
+      ),
+    );
+
+    expect(String((outcome as { digest?: string }).digest ?? "")).toContain(`/h/${domE}`);
+    expect(await isMember(domE, pozvani.id)).toBe(true);
   });
 });
 

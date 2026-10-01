@@ -33,13 +33,15 @@ export function toEntrySnapshot(row: {
  * Konvertuje srpski zapis iznosa u pare (minor jedinice) bez grešaka zaokruživanja.
  *
  * Podržani formati:
- *   "4.200"   → 420000  (tačka = separator hiljada)
- *   "12,50"   → 1250    (zarez = decimalni separator)
- *   "100"     → 10000
- *   "1.234.567" → 123456700
+ *   "4.200"     → 420000   (tačka = separator hiljada)
+ *   "12,50"     → 1250     (zarez = decimalni separator)
+ *   "1.000,50"  → 100050   (kombinovani format)
+ *   "0,50"      → 50       (sub-dinarni iznos; jedini validni oblik s vodećom nulom)
+ *   "100"       → 10000
  *
- * Odbija: nulu, negativne, pogrešno grupisane hiljade, više od 2 decimale,
- *         nenumerički unos, nesigurne ili nencelobrojne rezultate.
+ * Odbija: nulu, negativne, vodeće nule (osim "0" ispred zareza), pogrešno
+ *         grupisane hiljade, više od 2 decimale, nenumerički unos,
+ *         nesigurne ili nencelobrojne rezultate.
  */
 export function majorToMinor(raw: string): number {
   const s = raw.trim();
@@ -65,16 +67,17 @@ export function majorToMinor(raw: string): number {
     }
   }
 
-  // Validacija celobrojnog dela s opcionalnim separatorima hiljada (tačka)
+  // Validacija celobrojnog dela s opcionalnim separatorima hiljada (tačka).
+  // Vodeće nule su zabranjene osim tačno "0" (npr. "0,50" = 50 para je validno).
   const dotGroups = intPartRaw.split(".");
   if (dotGroups.length === 1) {
-    // Bez separatora — sve cifre
-    if (!/^\d+$/.test(intPartRaw)) {
+    // Bez separatora — "0" ili broj koji počinje nenultom cifrom
+    if (intPartRaw !== "0" && !/^[1-9]\d*$/.test(intPartRaw)) {
       throw new Error("Iznos mora biti pozitivan ceo broj.");
     }
   } else {
-    // Sa separatorima — prva grupa 1–3 cifre, svaka sledeća tačno 3 cifre
-    if (!/^\d{1,3}$/.test(dotGroups[0] ?? "")) {
+    // Sa separatorima — prva grupa 1–3 cifre bez vodećih nula, svaka sledeća tačno 3 cifre
+    if (!/^[1-9]\d{0,2}$/.test(dotGroups[0] ?? "")) {
       throw new Error("Iznos mora biti pozitivan ceo broj.");
     }
     for (let i = 1; i < dotGroups.length; i++) {

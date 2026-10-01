@@ -96,4 +96,24 @@ describe("rows", () => {
     expect(canManage("OWNER")).toBe(false);
     expect(canManage("")).toBe(false);
   });
+
+  it("prihvata kombinovani srpski format 1.000,50", () => {
+    expect(majorToMinor("1.000,50")).toBe(100050);
+  });
+
+  it("prihvata sub-dinarski iznos 0,50 ali odbija samo 0", () => {
+    expect(majorToMinor("0,50")).toBe(50);
+    expect(majorToMinor("0,05")).toBe(5);
+    expect(majorToMinor("0,5")).toBe(50);
+    expect(() => majorToMinor("0")).toThrow(/pozitivan/);
+    expect(() => majorToMinor("0,00")).toThrow(/pozitivan/);
+  });
+
+  it("odbija malformirane vodeće nule", () => {
+    expect(() => majorToMinor("007")).toThrow(/pozitivan/);
+    expect(() => majorToMinor("01.000")).toThrow(/pozitivan/);
+    expect(() => majorToMinor("00,50")).toThrow(/pozitivan/);
+    expect(() => majorToMinor("01")).toThrow(/pozitivan/);
+    expect(() => majorToMinor("00")).toThrow(/pozitivan/);
+  });
 });

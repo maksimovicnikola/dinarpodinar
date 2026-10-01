@@ -59,11 +59,15 @@ function collator(): Intl.Collator | null {
  * Kategorije jedne vrste, određenim redosledom (naziv na srpskom, pa `id`).
  * Bez trećeg ključa dve istoimene kategorije — arhiva ne zauzima naziv, pa se
  * istoimene dešavaju — menjale bi mesta između zahteva.
+ *
+ * Generička je zbog izmene unosa: tamo kategorija nosi i `archived`, a isti
+ * redosled mora da važi za oba spiska, pa dodatna polja ne smeju da se izgube
+ * u tipu rezultata.
  */
-export function categoriesOfKind(
-  categories: readonly CategoryOption[],
+export function categoriesOfKind<T extends CategoryOption>(
+  categories: readonly T[],
   kind: EntryKind,
-): CategoryOption[] {
+): T[] {
   const compare = collator();
 
   return categories

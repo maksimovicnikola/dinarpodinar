@@ -1,8 +1,12 @@
 "use server";
 
 /**
- * Server akcije podešavanja. Svaka je javna ulazna tačka i ne veruje strani
- * koja ju je iscrtala.
+ * Server akcije podešavanja i izmene unosa. Svaka je javna ulazna tačka i ne
+ * veruje strani koja ju je iscrtala.
+ *
+ * Izmena unosa stoji ovde, a ne uz svoju stranu, jer deli istu kapiju:
+ * vlasništvo baš u tom domaćinstvu, provereno pre ijedne izmene. Druga kapija
+ * bila bi druga šansa da se nešto propusti.
  *
  * Tri pravila važe za sve:
  *
@@ -19,9 +23,24 @@
  * `lib/server-actions.test.ts`.
  */
 
+import type { EntryKind } from "@finance/domain";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
+import {
+  checkCategoryChoice,
+  checkPersonChoice,
+  confirmedDelete,
+  ENTRY_DELETE_UNCONFIRMED,
+  ENTRY_GONE,
+  ENTRY_OWNER_ONLY,
+  entryEditErrorMessage,
+  entryMonthPath,
+  entryUpdatePayload,
+  parseEntryKind,
+  validateEntryFields,
+} from "@/lib/entry-edit";
 import { uuidParam } from "@/lib/next-path";
 import { canManage } from "@/lib/rows";
 import {
@@ -80,8 +99,14 @@ type AuthResult = Awaited<ReturnType<SupabaseClient["auth"]["getUser"]>>;
  * Greška pri upisu dolazi kroz `cookieFailure()`, a ne kao izuzetak. `getUser`
  * se ipak hvata, jer može da padne i iz drugih razloga: takav pad nije stvar
  * sesije i ide dalje, zajedničkom rukovaocu.
+ *
+ * `ownerOnly` je samo tekst odbijanja: podešavanja i unos nisu ista stvar za
+ * člana koji ih otvori, pa ni rečenica nije ista. Granica je jedna.
  */
-async function ownerGate(rawHouseholdId: string): Promise<Gate> {
+async function ownerGate(
+  rawHouseholdId: string,
+  ownerOnly: string = OWNER_ONLY,
+): Promise<Gate> {
   const householdId = uuidParam(rawHouseholdId);
   if (householdId === null) {
     return { ok: false, message: BAD_ADDRESS };
@@ -136,7 +161,7 @@ async function ownerGate(rawHouseholdId: string): Promise<Gate> {
   // `canManage` je zatvoreno na tačno „owner“: nečlan i član padaju na istu
   // poruku, pa se iz odgovora ne vidi ni da li domaćinstvo postoji.
   if (!canManage(membership.data?.role ?? "")) {
-    return { ok: false, message: OWNER_ONLY };
+    return { ok: false, message: ownerOnly };
   }
 
   return { ok: true, supabase, householdId };
@@ -543,5 +568,281 @@ export async function saveRuleAction(
         ? `Ponavljanje je sačuvano i radi ${rule.value.dayOfMonth}. u mesecu.`
         : "Ponavljanje je sačuvano i ugašeno.",
     );
+  });
+}
+
+// ----------------------------------------------------------------
+// Unosi
+// ----------------------------------------------------------------
+
+/**
+ * Ishod posla nad unosom: rečenica za formu kad izmena ne prolazi, a kad
+ * prolazi — mesec u koji se vlasnik vraća i strane koje treba osvežiti.
+ * Uspeh nema poruku jer se ne vidi: posle njega ide preusmerenje.
+ */
+type EntryOutcome =
+  | { ok: true; go: string; paths: readonly string[] }
+  | { ok: false; message: string };
+
+/**
+ * Okvir za unos: kapija vlasnika, posao, keš, pa preusmerenje.
+ *
+ * Preusmerenje je izvan `try` bloka namerno. `redirect` javlja odluku kroz
+ * izuzetak, pa bi ga rukovalac grešaka pojeo i upisanu izmenu prijavio kao
+ * „nije sačuvano“ — vlasnik bi je zatim ponovio nad podatkom koji je već
+ * promenjen.
+ */
+async function runEntryAsOwner(
+  rawHouseholdId: string,
+  work: (gate: OpenGate) => Promise<EntryOutcome>,
+): Promise<SettingsState> {
+  let outcome: EntryOutcome;
+
+  try {
+    const gate = await ownerGate(rawHouseholdId, ENTRY_OWNER_ONLY);
+    if (!gate.ok) {
+      return settingsFailure(gate.message);
+    }
+
+    outcome = await work(gate);
+
+    if (outcome.ok) {
+      for (const path of outcome.paths) {
+        revalidatePath(path);
+      }
+    }
+  } catch (caught) {
+    console.error("unos: akcija nije uspela", caught);
+    return settingsFailure(
+      entryEditErrorMessage(caught instanceof Error ? caught.message : null),
+    );
+  }
+
+  if (!outcome.ok) {
+    return settingsFailure(outcome.message);
+  }
+
+  redirect(outcome.go);
+}
+
+/** Red unosa koji se menja, sužen i po `id` i po domaćinstvu iz forme. */
+async function loadEntryForOwner(
+  supabase: SupabaseClient,
+  householdId: string,
+  entryId: string,
+): Promise<
+  | { ok: true; kind: EntryKind; categoryId: string; personId: string; occurredOn: string }
+  | { ok: false; message: string }
+> {
+  const entry = await supabase
+    .from("entries")
+    .select("id, kind, category_id, person_id, occurred_on")
+    .eq("id", entryId)
+    .eq("household_id", householdId)
+    .maybeSingle();
+
+  if (entry.error) {
+    console.error("unos: čitanje reda nije uspelo", entry.error);
+    return { ok: false, message: entryEditErrorMessage(entry.error.message) };
+  }
+
+  if (!entry.data) {
+    return { ok: false, message: ENTRY_GONE };
+  }
+
+  const kind = parseEntryKind(entry.data.kind);
+  if (kind === null) {
+    // Red postoji, ali ne nosi ni trošak ni prihod. Vrsta se ne pogađa:
+    // pogrešna bi kroz ponudu kategorija promenila i samu prirodu unosa.
+    console.error(`unos: red ${entryId} nema prepoznatu vrstu`);
+    return { ok: false, message: entryEditErrorMessage(null) };
+  }
+
+  return {
+    ok: true,
+    kind,
+    categoryId: entry.data.category_id,
+    personId: entry.data.person_id,
+    occurredOn: entry.data.occurred_on,
+  };
+}
+
+/**
+ * Izmena jednog unosa: iznos, kategorija, osoba, datum i beleška.
+ *
+ * Šta se **ne** menja i zašto:
+ *   - vrsta, jer kategorija pripada tačno jednoj vrsti; promena vrste je nov
+ *     unos, ne izmena ovog;
+ *   - `person_name` i `created_by`, jer su snimci — `prepare_entry` ih čuva
+ *     sam kad `person_id` ostane isti;
+ *   - `request_id`, jer opisuje zahtev koji je unos napravio; pomeranje ključa
+ *     nateralo bi budući retry da vrati pogrešan unos (`keep_entry_request_id`);
+ *   - `recurring_rule_id` i `household_id`, jer ih vlasnik ovde ne bira.
+ *
+ * Nijedno od tih polja se ne šalje ni kao ista vrednost: ono što se ne pošalje
+ * ne može ni da se pokvari.
+ */
+export async function updateEntryAction(
+  _previous: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  return runEntryAsOwner(text(formData, "dom"), async ({ supabase, householdId }) => {
+    const entryId = uuidParam(text(formData, "unos"));
+    if (entryId === null) {
+      return { ok: false, message: ENTRY_GONE };
+    }
+
+    const fields = validateEntryFields({
+      amount: text(formData, "iznos"),
+      categoryId: text(formData, "kategorija"),
+      personId: text(formData, "osoba"),
+      occurredOn: text(formData, "datum"),
+      note: text(formData, "beleska"),
+    });
+
+    if (!fields.ok) {
+      return { ok: false, message: fields.message };
+    }
+
+    const entry = await loadEntryForOwner(supabase, householdId, entryId);
+    if (!entry.ok) {
+      return entry;
+    }
+
+    // Kategorija se čita u okviru domaćinstva, pa pogođen tuđ `id` izgleda
+    // isto kao obrisan: nema je.
+    const category = await supabase
+      .from("categories")
+      .select("id, kind, archived")
+      .eq("id", fields.value.categoryId)
+      .eq("household_id", householdId)
+      .maybeSingle();
+
+    if (category.error) {
+      return { ok: false, message: entryEditErrorMessage(category.error.message) };
+    }
+
+    const chosenCategory = checkCategoryChoice({
+      chosen: category.data
+        ? {
+            id: category.data.id,
+            kind: parseEntryKind(category.data.kind),
+            archived: category.data.archived === true,
+          }
+        : null,
+      entry: { kind: entry.kind, categoryId: entry.categoryId },
+    });
+
+    if (!chosenCategory.ok) {
+      return { ok: false, message: chosenCategory.message };
+    }
+
+    // Članstvo se pita samo kad se osoba menja — isto kao `prepare_entry`.
+    // Zatečena osoba sme da ostane i kad je izašla iz domaćinstva, jer bi
+    // inače izmena beleške tražila i prepisivanje unosa na nekog drugog.
+    let isMember = false;
+    if (fields.value.personId !== entry.personId) {
+      const membership = await supabase
+        .from("memberships")
+        .select("user_id")
+        .eq("household_id", householdId)
+        .eq("user_id", fields.value.personId)
+        .maybeSingle();
+
+      if (membership.error) {
+        return { ok: false, message: entryEditErrorMessage(membership.error.message) };
+      }
+
+      isMember = membership.data !== null;
+    }
+
+    const chosenPerson = checkPersonChoice({
+      chosenId: fields.value.personId,
+      entryPersonId: entry.personId,
+      isMember,
+    });
+
+    if (!chosenPerson.ok) {
+      return { ok: false, message: chosenPerson.message };
+    }
+
+    const saved = await supabase
+      .from("entries")
+      .update(
+        entryUpdatePayload({
+          ...fields.value,
+          categoryId: chosenCategory.value,
+          personId: chosenPerson.value,
+        }),
+      )
+      .eq("id", entryId)
+      .eq("household_id", householdId)
+      .select("id");
+
+    if (saved.error) {
+      return { ok: false, message: entryEditErrorMessage(saved.error.message) };
+    }
+
+    if (touched(saved.data) === 0) {
+      return { ok: false, message: ENTRY_GONE };
+    }
+
+    // Mesec **novog** datuma: unos prebačen u drugi mesec inače nestane sa
+    // ekrana na koji se vlasnik vraća.
+    return {
+      ok: true,
+      go: entryMonthPath(householdId, fields.value.occurredOn),
+      paths: [`/h/${householdId}`, `/h/${householdId}/unos/${entryId}`],
+    };
+  });
+}
+
+/**
+ * Brisanje jednog unosa.
+ *
+ * Potvrda je polje forme, a ne samo drugi klik: brisanje je nepovratno, a
+ * izmena i brisanje stoje na istoj strani.
+ */
+export async function deleteEntryAction(
+  _previous: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  return runEntryAsOwner(text(formData, "dom"), async ({ supabase, householdId }) => {
+    const entryId = uuidParam(text(formData, "unos"));
+    if (entryId === null) {
+      return { ok: false, message: ENTRY_GONE };
+    }
+
+    if (!confirmedDelete(text(formData, "potvrda"))) {
+      return { ok: false, message: ENTRY_DELETE_UNCONFIRMED };
+    }
+
+    // Datum se čita pre brisanja: posle njega reda više nema, a vlasnik mora
+    // da se vrati u mesec iz kog je unos nestao.
+    const entry = await loadEntryForOwner(supabase, householdId, entryId);
+    if (!entry.ok) {
+      return entry;
+    }
+
+    const removed = await supabase
+      .from("entries")
+      .delete()
+      .eq("id", entryId)
+      .eq("household_id", householdId)
+      .select("id");
+
+    if (removed.error) {
+      return { ok: false, message: entryEditErrorMessage(removed.error.message) };
+    }
+
+    if (touched(removed.data) === 0) {
+      return { ok: false, message: ENTRY_GONE };
+    }
+
+    return {
+      ok: true,
+      go: entryMonthPath(householdId, entry.occurredOn),
+      paths: [`/h/${householdId}`, `/h/${householdId}/unos/${entryId}`],
+    };
   });
 }

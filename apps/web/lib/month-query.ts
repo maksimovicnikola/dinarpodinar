@@ -62,20 +62,44 @@ export function monthParts(month: string): { year: number; monthNumber: number }
   return splitMonth(month);
 }
 
-export function previousMonthKey(month: string): string {
-  const { year, monthNumber } = splitMonth(month);
-
-  return monthNumber === 1
-    ? `${String(year - 1).padStart(4, "0")}-12`
-    : `${String(year).padStart(4, "0")}-${String(monthNumber - 1).padStart(2, "0")}`;
+/** Mesec koji je izvan prihvaćenog prozora ne postoji za ovu aplikaciju. */
+function withinWindow(month: string): string | null {
+  return isMonthKey(month) ? month : null;
 }
 
-export function nextMonthKey(month: string): string {
+/**
+ * Prethodni mesec, ili `null` na donjoj ivici prozora.
+ *
+ * `1900-01` je prihvaćen mesec, ali `1899-12` nije. Da se ovde vrati niska,
+ * svaki sledeći korak (natpis, link, upit) radio bi sa ključem koji sopstveni
+ * validator odbija, pa bi `monthLabel` bacio usred iscrtavanja strane.
+ */
+export function previousMonthKey(month: string): string | null {
   const { year, monthNumber } = splitMonth(month);
 
-  return monthNumber === 12
-    ? `${String(year + 1).padStart(4, "0")}-01`
-    : `${String(year).padStart(4, "0")}-${String(monthNumber + 1).padStart(2, "0")}`;
+  return withinWindow(
+    monthNumber === 1
+      ? `${String(year - 1).padStart(4, "0")}-12`
+      : `${String(year).padStart(4, "0")}-${String(monthNumber - 1).padStart(2, "0")}`,
+  );
+}
+
+/** Sledeći mesec, ili `null` na gornjoj ivici prozora (`2999-12`). */
+export function nextMonthKey(month: string): string | null {
+  const { year, monthNumber } = splitMonth(month);
+
+  return withinWindow(
+    monthNumber === 12
+      ? `${String(year + 1).padStart(4, "0")}-01`
+      : `${String(year).padStart(4, "0")}-${String(monthNumber + 1).padStart(2, "0")}`,
+  );
+}
+
+export type MonthNeighbors = { previous: string | null; next: string | null };
+
+/** Oba suseda u jednom prolazu — strana ih računa jednom i deli svim mestima. */
+export function monthNeighbors(month: string): MonthNeighbors {
+  return { previous: previousMonthKey(month), next: nextMonthKey(month) };
 }
 
 type MembershipRow = {

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPeople,
   isMonthKey,
+  monthNeighbors,
   monthParam,
   monthParts,
   nextMonthKey,
@@ -104,6 +105,32 @@ describe("granice meseca", () => {
     expect(() => previousMonthKey("2026-13")).toThrow(/YYYY-MM/);
     expect(() => nextMonthKey("x")).toThrow(/YYYY-MM/);
     expect(() => monthParts("2026-9")).toThrow(/YYYY-MM/);
+  });
+
+  it("sused izvan prihvaćenog prozora je `null`, ne ključ koji validator odbija", () => {
+    expect(previousMonthKey("1900-01")).toBeNull();
+    expect(nextMonthKey("2999-12")).toBeNull();
+  });
+
+  it("susedi tačno unutar prozora i dalje postoje", () => {
+    expect(nextMonthKey("1900-01")).toBe("1900-02");
+    expect(previousMonthKey("1900-02")).toBe("1900-01");
+    expect(previousMonthKey("2999-12")).toBe("2999-11");
+    expect(nextMonthKey("2999-11")).toBe("2999-12");
+  });
+
+  it("oba suseda stižu u jednom pozivu", () => {
+    expect(monthNeighbors("2026-09")).toEqual({ previous: "2026-08", next: "2026-10" });
+    expect(monthNeighbors("1900-01")).toEqual({ previous: null, next: "1900-02" });
+    expect(monthNeighbors("2999-12")).toEqual({ previous: "2999-11", next: null });
+  });
+
+  it("svaki vraćeni sused i sam prolazi validator", () => {
+    for (const month of ["1900-01", "1900-02", "2026-01", "2026-12", "2999-11", "2999-12"]) {
+      const { previous, next } = monthNeighbors(month);
+      if (previous !== null) expect(isMonthKey(previous), `${month} ← ${previous}`).toBe(true);
+      if (next !== null) expect(isMonthKey(next), `${month} → ${next}`).toBe(true);
+    }
   });
 });
 

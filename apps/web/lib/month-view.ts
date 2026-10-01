@@ -18,7 +18,12 @@ import {
   type EntrySnapshot,
 } from "@finance/domain";
 
-import { monthParts, FALLBACK_PERSON_NAME, type Person } from "./month-query";
+import {
+  monthNeighbors,
+  monthParts,
+  FALLBACK_PERSON_NAME,
+  type Person,
+} from "./month-query";
 import type { CategoryRow, EntryDetail, RecurringSnapshot } from "./rows";
 
 const MONTH_NAMES = [
@@ -52,6 +57,32 @@ export function formatDate(isoDate: string): string {
   return `${Number(day)}.${Number(month)}.${Number(year)}.`;
 }
 
+export type MonthStep = { month: string; label: string };
+
+export type MonthNav = {
+  previous: MonthStep | null;
+  current: MonthStep;
+  next: MonthStep | null;
+};
+
+/**
+ * Natpisi i odredišta za prebacivač meseca, sastavljeni na jednom mestu.
+ *
+ * Sused se natpisuje tek pošto se potvrdi da je i sam prihvaćen mesec, pa
+ * `1900-01` i `2999-12` nemaju šta da sruše: tamo jednostavno nema linka.
+ */
+export function buildMonthNav(month: string): MonthNav {
+  const neighbors = monthNeighbors(month);
+  const step = (value: string | null): MonthStep | null =>
+    value === null ? null : { month: value, label: monthLabel(value) };
+
+  return {
+    previous: step(neighbors.previous),
+    current: { month, label: monthLabel(month) },
+    next: step(neighbors.next),
+  };
+}
+
 function compareNames(a: string, b: string): number {
   if (typeof Intl !== "undefined" && typeof Intl.Collator === "function") {
     return new Intl.Collator("sr").compare(a, b);
@@ -73,13 +104,24 @@ function usablePerson(personId?: string, personName?: string): Person | null {
 }
 
 export type MonthBar = {
+  /** Jedini stabilan ključ: arhivirana i aktivna kategorija smeju deliti naziv. */
+  categoryId: string;
   name: string;
+  archived: boolean;
   width: number;
   label: string;
   /** Kategorija ima postavljen limit. Bez njega puna traka ne znači „na limitu“. */
   limited: boolean;
   /** Potrošeno je dostiglo ili prešlo limit. */
   over: boolean;
+};
+
+export type MonthAlert = {
+  categoryId: string;
+  name: string;
+  archived: boolean;
+  threshold: 80 | 100;
+  message: string;
 };
 
 export type MonthView = {
@@ -89,18 +131,27 @@ export type MonthView = {
   leftoverMinor: number;
   sentence: string;
   bars: MonthBar[];
+  /** Ugovor iz briefa: gole rečenice, istim redosledom kao `alertRows`. */
   alerts: string[];
+  alertRows: MonthAlert[];
 };
 
 export function buildMonthView(input: {
   currency: string;
   month: string;
-  categories: CategorySnapshot[];
+  /**
+   * `archived` je neobavezan: `CategorySnapshot[]` iz briefa i dalje prolazi,
+   * a strana koja zna za arhivu dobija oznaku u traci i upozorenju.
+   */
+  categories: Array<CategorySnapshot & { archived?: boolean }>;
   entries: EntrySnapshot[];
   previous: EntrySnapshot[] | null;
   personId?: string;
   personName?: string;
 }): MonthView {
+  const archivedById = new Map(
+    input.categories.map((category) => [category.id, category.archived === true]),
+  );
   const person = usablePerson(input.personId, input.personName);
   const visible = person
     ? input.entries.filter((entry) => entry.personId === person.id)
@@ -139,7 +190,8 @@ export function buildMonthView(input: {
     .filter((category) => category.kind === "expense" && category.spentMinor > 0)
     .sort((a, b) => {
       if (a.spentMinor !== b.spentMinor) return b.spentMinor - a.spentMinor;
-      return compareNames(a.name, b.name);
+      const byName = compareNames(a.name, b.name);
+      return byName !== 0 ? byName : a.categoryId.localeCompare(b.categoryId);
     })
     .map((category) => {
       const limitMinor = category.limitMinor;
@@ -148,7 +200,9 @@ export function buildMonthView(input: {
         : 100;
       const limitLabel = limitMinor ? ` / ${formatMoney(limitMinor, input.currency)}` : "";
       return {
+        categoryId: category.categoryId,
         name: category.name,
+        archived: archivedById.get(category.categoryId) === true,
         width: ratio,
         label: `${formatMoney(category.spentMinor, input.currency)}${limitLabel}`,
         limited: Boolean(limitMinor),
@@ -156,12 +210,19 @@ export function buildMonthView(input: {
       };
     });
 
-  const alerts = [...household.categories]
-    .sort((a, b) => compareNames(a.name, b.name))
+  const alertRows = [...household.categories]
+    .sort((a, b) => {
+      const byName = compareNames(a.name, b.name);
+      return byName !== 0 ? byName : a.categoryId.localeCompare(b.categoryId);
+    })
     .flatMap((category) =>
-      limitThresholds(category.spentMinor, category.limitMinor).map(
-        (hit) => `${category.name} je prešla ${hit}% limita.`,
-      ),
+      limitThresholds(category.spentMinor, category.limitMinor).map((threshold) => ({
+        categoryId: category.categoryId,
+        name: category.name,
+        archived: archivedById.get(category.categoryId) === true,
+        threshold,
+        message: `${category.name} je prešla ${threshold}% limita.`,
+      })),
     );
 
   return {
@@ -171,7 +232,8 @@ export function buildMonthView(input: {
     leftoverMinor: summary.leftoverMinor,
     sentence,
     bars,
-    alerts,
+    alerts: alertRows.map((row) => row.message),
+    alertRows,
   };
 }
 

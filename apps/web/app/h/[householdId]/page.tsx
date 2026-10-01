@@ -5,17 +5,11 @@ import { Notice } from "@/components/form";
 import { Passbook, PassbookHeader, Ruler } from "@/components/passbook";
 import {
   buildEntryList,
+  buildMonthNav,
   buildMonthView,
   buildUpcoming,
-  monthLabel,
 } from "@/lib/month-view";
-import {
-  buildPeople,
-  monthParam,
-  nextMonthKey,
-  previousMonthKey,
-  selectPerson,
-} from "@/lib/month-query";
+import { buildPeople, monthParam, selectPerson } from "@/lib/month-query";
 import { loginPathWithNext, uuidParam } from "@/lib/next-path";
 import {
   canManage,
@@ -74,7 +68,10 @@ export default async function MonthPage({
 
   const today = todayInBelgrade(new Date());
   const month = monthParam(query.month, today);
-  const previousMonth = previousMonthKey(month);
+  // Susedi se računaju jednom. Na ivicama prihvaćenog prozora (`1900-01`,
+  // `2999-12`) sused ne postoji, pa se ni ne natpisuje ni ne linkuje.
+  const nav = buildMonthNav(month);
+  const previousMonth = nav.previous?.month ?? null;
 
   // RLS je granica, ali svaki upit i dalje izričito sužava na ovo domaćinstvo
   // i na dva meseca koja se zaista prikazuju.
@@ -92,7 +89,7 @@ export default async function MonthPage({
         "id, kind, amount_minor, category_id, person_id, person_name, occurred_on, note, recurring_rule_id",
       )
       .eq("household_id", householdId)
-      .in("month_key", [month, previousMonth]),
+      .in("month_key", previousMonth === null ? [month] : [month, previousMonth]),
     supabase
       .from("memberships")
       .select("user_id, role, profiles(display_name)")
@@ -150,7 +147,11 @@ export default async function MonthPage({
   const categoryRows = (categories.data ?? []).map(toCategoryRow);
   const entryRows = (entries.data ?? []).map(toEntryDetail);
   const current = entryRows.filter((entry) => monthKey(entry.occurredOn) === month);
-  const previous = entryRows.filter((entry) => monthKey(entry.occurredOn) === previousMonth);
+  // Prvi mesec prozora nema prethodni, pa pravilo rasta ne važi.
+  const previous =
+    previousMonth === null
+      ? null
+      : entryRows.filter((entry) => monthKey(entry.occurredOn) === previousMonth);
 
   const view = buildMonthView({
     currency,
@@ -193,20 +194,24 @@ export default async function MonthPage({
         <PassbookHeader
           eyebrow="Mesečni pregled"
           title={household.data.name}
-          lead={`${monthLabel(month)} — ${scope}`}
+          lead={`${nav.current.label} — ${scope}`}
         />
 
         <div className="stack stack--loose">
           <nav className="switch" aria-label="Izbor meseca">
-            <a className="switch__item" href={href(previousMonth, person?.id)} rel="prev">
-              {monthLabel(previousMonth)}
-            </a>
+            {nav.previous ? (
+              <a className="switch__item" href={href(nav.previous.month, person?.id)} rel="prev">
+                {nav.previous.label}
+              </a>
+            ) : null}
             <span className="switch__item switch__item--on" aria-current="page">
-              {monthLabel(month)}
+              {nav.current.label}
             </span>
-            <a className="switch__item" href={href(nextMonthKey(month), person?.id)} rel="next">
-              {monthLabel(nextMonthKey(month))}
-            </a>
+            {nav.next ? (
+              <a className="switch__item" href={href(nav.next.month, person?.id)} rel="next">
+                {nav.next.label}
+              </a>
+            ) : null}
           </nav>
 
           <nav className="switch" aria-label="Filter po osobi">
@@ -250,11 +255,14 @@ export default async function MonthPage({
 
           <p className="verdict">{view.sentence}</p>
 
-          {view.alerts.length > 0 ? (
+          {view.alertRows.length > 0 ? (
             <ul className="alerts stack stack--tight" aria-label="Pragovi limita">
-              {view.alerts.map((alert) => (
-                <li key={alert}>
-                  <Notice tone="bad">{alert}</Notice>
+              {view.alertRows.map((alert) => (
+                <li key={`${alert.categoryId}:${alert.threshold}`}>
+                  <Notice tone="bad">
+                    {alert.message}
+                    {alert.archived ? <span className="tag tag--quiet">arhivirana</span> : null}
+                  </Notice>
                 </li>
               ))}
             </ul>
@@ -275,9 +283,10 @@ export default async function MonthPage({
         ) : (
           <ul className="bars">
             {view.bars.map((bar) => (
-              <li className="bar" key={bar.name}>
+              <li className="bar" key={bar.categoryId}>
                 <span className="bar__name">
                   {bar.name}
+                  {bar.archived ? <span className="tag tag--quiet">arhivirana</span> : null}
                   {bar.limited ? null : <span className="tag tag--quiet">bez limita</span>}
                 </span>
                 <span className="bar__amount amount">{bar.label}</span>
@@ -295,7 +304,7 @@ export default async function MonthPage({
 
       <Passbook>
         <h2>Dospeća i podsetnici</h2>
-        <p className="fine">Mesečna ponavljanja koja dospevaju u {monthLabel(month)}</p>
+        <p className="fine">Mesečna ponavljanja koja dospevaju u {nav.current.label}</p>
 
         {upcoming.length === 0 ? (
           <p className="fine">Nema aktivnih ponavljanja za ovaj mesec.</p>
@@ -325,7 +334,9 @@ export default async function MonthPage({
       <Passbook>
         <h2>Unosi</h2>
         <p className="fine">
-          {person ? `Unosi osobe ${person.name} u ${monthLabel(month)}` : `Svi unosi u ${monthLabel(month)}`}
+          {person
+            ? `Unosi osobe ${person.name} u ${nav.current.label}`
+            : `Svi unosi u ${nav.current.label}`}
         </p>
 
         {ledger.length === 0 ? (

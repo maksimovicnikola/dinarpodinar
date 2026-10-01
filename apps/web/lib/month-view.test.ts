@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildEntryList,
+  buildMonthNav,
   buildMonthView,
   buildUpcoming,
   formatDate,
@@ -184,7 +185,9 @@ describe("buildMonthView — filter po osobi", () => {
 
     // Marko sam je na 40% limita za Hranu; domaćinstvo je na 110%.
     expect(view.bars[0]).toEqual({
+      categoryId: "food",
       name: "Hrana",
+      archived: false,
       width: 40,
       label: "4.000 RSD / 10.000 RSD",
       limited: true,
@@ -233,7 +236,15 @@ describe("buildMonthView — trake", () => {
     });
 
     expect(view.bars).toEqual([
-      { name: "Hrana", width: 100, label: "1.234,56 RSD", limited: false, over: false },
+      {
+        categoryId: "food",
+        name: "Hrana",
+        archived: false,
+        width: 100,
+        label: "1.234,56 RSD",
+        limited: false,
+        over: false,
+      },
     ]);
     expect(view.alerts).toEqual([]);
   });
@@ -306,7 +317,15 @@ describe("buildMonthView — trake", () => {
     });
 
     expect(view.bars).toEqual([
-      { name: "Hrana", width: 100, label: "15.000 RSD / 10.000 RSD", limited: true, over: true },
+      {
+        categoryId: "food",
+        name: "Hrana",
+        archived: true,
+        width: 100,
+        label: "15.000 RSD / 10.000 RSD",
+        limited: true,
+        over: true,
+      },
     ]);
     expect(view.sentence).toBe("Hrana je 5.000 RSD preko limita. Najveći deo: Marko.");
   });
@@ -388,6 +407,198 @@ describe("buildMonthView — pragovi i rečenice iz domena", () => {
     });
 
     expect(view.alerts).toEqual(["Hrana je prešla 80% limita.", "Prevoz je prešla 80% limita."]);
+  });
+});
+
+describe("buildMonthView — arhivirana i aktivna kategorija istog naziva", () => {
+  // Baza to dozvoljava: jedinstvenost naziva važi samo među neARHIVIRANIM
+  // kategorijama (`categories_active_name … where not archived`).
+  const staraHrana: CategoryRow = {
+    id: "food-old",
+    name: "Hrana",
+    kind: "expense",
+    limitMinor: 500_000,
+    archived: true,
+  };
+  const novaHrana: CategoryRow = {
+    id: "food",
+    name: "Hrana",
+    kind: "expense",
+    limitMinor: 1_000_000,
+    archived: false,
+  };
+  const categories = [staraHrana, novaHrana];
+  const entries = [
+    entry({ id: "1", categoryId: "food-old", amountMinor: 600_000 }),
+    entry({ id: "2", categoryId: "food", amountMinor: 850_000 }),
+  ];
+
+  function view() {
+    return buildMonthView({ currency: "RSD", month: "2026-09", categories, entries, previous: null });
+  }
+
+  it("obe kategorije dobijaju svoju traku sa jedinstvenim ključem", () => {
+    const bars = view().bars;
+
+    expect(bars).toHaveLength(2);
+    expect(new Set(bars.map((bar) => bar.categoryId)).size).toBe(2);
+    expect(bars.map((bar) => bar.categoryId)).toEqual(["food", "food-old"]);
+  });
+
+  it("iznosi i procenti se ne mešaju između istoimenih kategorija", () => {
+    const [active, archived] = view().bars;
+
+    expect(active).toMatchObject({
+      categoryId: "food",
+      archived: false,
+      width: 85,
+      label: "8.500 RSD / 10.000 RSD",
+      over: false,
+    });
+    expect(archived).toMatchObject({
+      categoryId: "food-old",
+      archived: true,
+      width: 100,
+      label: "6.000 RSD / 5.000 RSD",
+      over: true,
+    });
+  });
+
+  it("arhivirana traka je obeležena, aktivna nije", () => {
+    expect(view().bars.map((bar) => bar.archived)).toEqual([false, true]);
+  });
+
+  it("pragovi se računaju po kategoriji, ne po nazivu", () => {
+    const rows = view().alertRows;
+
+    expect(rows.map((row) => [row.categoryId, row.threshold])).toEqual([
+      ["food", 80],
+      ["food-old", 80],
+      ["food-old", 100],
+    ]);
+  });
+
+  it("svako upozorenje ima jedinstven ključ iako je rečenica ista", () => {
+    const rows = view().alertRows;
+    const keys = rows.map((row) => `${row.categoryId}:${row.threshold}`);
+
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(new Set(rows.map((row) => row.message)).size).toBe(2);
+  });
+
+  it("upozorenje nosi zastavicu arhive", () => {
+    expect(view().alertRows.map((row) => row.archived)).toEqual([false, true, true]);
+  });
+
+  it("`alerts` ostaje niz niski, istim redosledom kao `alertRows`", () => {
+    const result = view();
+
+    expect(result.alerts).toEqual([
+      "Hrana je prešla 80% limita.",
+      "Hrana je prešla 80% limita.",
+      "Hrana je prešla 100% limita.",
+    ]);
+    expect(result.alerts).toEqual(result.alertRows.map((row) => row.message));
+  });
+
+  it("isti naziv i isti iznos razdvaja identifikator, pa je redosled određen", () => {
+    const tie = buildMonthView({
+      currency: "RSD",
+      month: "2026-09",
+      categories,
+      entries: [
+        entry({ id: "1", categoryId: "food-old", amountMinor: 400_000 }),
+        entry({ id: "2", categoryId: "food", amountMinor: 400_000 }),
+      ],
+      previous: null,
+    });
+
+    expect(tie.bars.map((bar) => bar.categoryId)).toEqual(["food", "food-old"]);
+  });
+
+  it("kategorije bez `archived` polja i dalje prolaze ugovor iz briefa", () => {
+    const plain = buildMonthView({
+      currency: "RSD",
+      month: "2026-09",
+      categories: [{ id: "food", name: "Hrana", kind: "expense", limitMinor: 1_000_000 }],
+      entries: [entry({ id: "1", amountMinor: 1_200_000 })],
+      previous: null,
+    });
+
+    expect(plain.bars[0]?.archived).toBe(false);
+    expect(plain.alertRows.every((row) => row.archived === false)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------- buildMonthNav
+
+describe("buildMonthNav", () => {
+  it("usred prozora nudi oba suseda sa natpisima", () => {
+    expect(buildMonthNav("2026-09")).toEqual({
+      previous: { month: "2026-08", label: "avgust 2026." },
+      current: { month: "2026-09", label: "septembar 2026." },
+      next: { month: "2026-10", label: "oktobar 2026." },
+    });
+  });
+
+  it("prelazak godine unazad i unapred nosi tačnu godinu", () => {
+    expect(buildMonthNav("2026-01").previous).toEqual({
+      month: "2025-12",
+      label: "decembar 2025.",
+    });
+    expect(buildMonthNav("2026-12").next).toEqual({ month: "2027-01", label: "januar 2027." });
+  });
+
+  it("donja ivica prozora se iscrtava bez prethodnog meseca", () => {
+    expect(buildMonthNav("1900-01")).toEqual({
+      previous: null,
+      current: { month: "1900-01", label: "januar 1900." },
+      next: { month: "1900-02", label: "februar 1900." },
+    });
+  });
+
+  it("gornja ivica prozora se iscrtava bez sledećeg meseca", () => {
+    expect(buildMonthNav("2999-12")).toEqual({
+      previous: { month: "2999-11", label: "novembar 2999." },
+      current: { month: "2999-12", label: "decembar 2999." },
+      next: null,
+    });
+  });
+
+  it("nijedan prihvaćen mesec ne obara sastavljanje prebacivača", () => {
+    for (const month of [
+      "1900-01",
+      "1900-02",
+      "1900-12",
+      "2026-01",
+      "2026-06",
+      "2026-12",
+      "2999-01",
+      "2999-11",
+      "2999-12",
+    ]) {
+      expect(() => buildMonthNav(month), month).not.toThrow();
+      const nav = buildMonthNav(month);
+      expect(nav.current.label, month).toMatch(/^[a-zčćšžđ]+ \d{4}\.$/);
+      for (const step of [nav.previous, nav.next]) {
+        if (step !== null) expect(step.label, `${month} → ${step.month}`).toMatch(/\d{4}\.$/);
+      }
+    }
+  });
+
+  it("ivica ima tačno jednog suseda, sredina oba", () => {
+    expect([buildMonthNav("1900-01").previous, buildMonthNav("1900-01").next].filter(Boolean))
+      .toHaveLength(1);
+    expect([buildMonthNav("2999-12").previous, buildMonthNav("2999-12").next].filter(Boolean))
+      .toHaveLength(1);
+    expect([buildMonthNav("2026-05").previous, buildMonthNav("2026-05").next].filter(Boolean))
+      .toHaveLength(2);
+  });
+
+  it("neispravan mesec se odbija pre sastavljanja", () => {
+    expect(() => buildMonthNav("2026-13")).toThrow(/YYYY-MM/);
+    expect(() => buildMonthNav("1899-12")).toThrow(/YYYY-MM/);
+    expect(() => buildMonthNav("3000-01")).toThrow(/YYYY-MM/);
   });
 });
 

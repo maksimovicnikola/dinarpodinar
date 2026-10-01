@@ -28,9 +28,12 @@ import { createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { monthKey, occurrenceDate, todayInBelgrade } from "@finance/domain";
 import { createServerClient } from "@supabase/ssr";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { isMonthKey, monthParts, monthsAhead } from "@/lib/month-query";
 
 const APP_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
@@ -52,11 +55,38 @@ let member: TestUser;
 let outsider: TestUser;
 let householdId = "";
 let foodId = "";
-let today = "";
 
-/** Mesec u koji unos pripada, namerno **različit** od tekućeg. */
-const TARGET_DATE = "2027-02-17";
-const TARGET_MONTH = TARGET_DATE.slice(0, 7);
+/** Današnji dan u Beogradu — ista funkcija kojom strana računa podrazumevani datum. */
+const today = todayInBelgrade(new Date());
+
+/**
+ * Mesec unosa mora da bude **različit** od tekućeg, inače test „posle čuvanja
+ * se ide u mesec unosa“ ne dokazuje ništa.
+ *
+ * Pet koraka unapred je izvedeno iz današnjeg beogradskog dana, ne upisano
+ * rukom: upisan datum zastari čim taj mesec stigne, pa bi test jednog jutra
+ * počeo da pada sam od sebe. Prelazak godine i gornju ivicu prozora rešava
+ * `monthsAhead`, pa ovde nema nijedne sopstvene aritmetike nad niskom.
+ */
+const MONTHS_AHEAD = 5;
+const TARGET_DAY = 17;
+
+function futureMonth(): string {
+  const month = monthsAhead(monthKey(today), MONTHS_AHEAD);
+
+  if (month === null) {
+    throw new Error(
+      `Mesec ${MONTHS_AHEAD} koraka ispred ${monthKey(today)} izlazi iz prozora koji aplikacija otvara.`,
+    );
+  }
+
+  return month;
+}
+
+const TARGET_MONTH = futureMonth();
+const target = monthParts(TARGET_MONTH);
+/** `occurrenceDate` svodi dan na dužinu meseca, pa datum ne može da ne postoji. */
+const TARGET_DATE = occurrenceDate(target.year, target.monthNumber, TARGET_DAY);
 
 function adminClient(): SupabaseClient {
   return createClient(url, service, { auth: { persistSession: false } });
@@ -152,15 +182,6 @@ async function get(path: string, cookie?: string) {
   };
 }
 
-function belgradeToday(): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Belgrade",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-}
-
 beforeAll(async () => {
   if (!anon || !service) {
     throw new Error(
@@ -222,8 +243,6 @@ beforeAll(async () => {
     .single();
   if (food.error) throw food.error;
   foodId = food.data!.id as string;
-
-  today = belgradeToday();
 }, 120_000);
 
 afterAll(async () => {
@@ -240,6 +259,27 @@ afterAll(async () => {
 
   server?.kill("SIGTERM");
 }, 60_000);
+
+// ----------------------------------------------------------------
+// Ciljni mesec: izveden, ne upisan
+// ----------------------------------------------------------------
+
+describe("ciljni mesec", () => {
+  it("je prihvaćen mesec koji aplikacija ume da otvori", () => {
+    expect(isMonthKey(TARGET_MONTH)).toBe(true);
+    expect(monthKey(TARGET_DATE)).toBe(TARGET_MONTH);
+  });
+
+  it("nikad nije tekući mesec, kog god dana se test pokrene", () => {
+    expect(TARGET_MONTH).not.toBe(monthKey(today));
+    expect(monthsAhead(monthKey(today), MONTHS_AHEAD)).toBe(TARGET_MONTH);
+  });
+
+  it("datum je stvaran dan tog meseca", () => {
+    expect(TARGET_DATE).toMatch(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/);
+    expect(Number(TARGET_DATE.slice(8, 10))).toBe(TARGET_DAY);
+  });
+});
 
 // ----------------------------------------------------------------
 // Učitavanje strane
@@ -362,7 +402,7 @@ describe("slanje forme sa ponavljanjem", () => {
 
     expect(current.status).toBe(200);
     expect(current.markup).not.toContain(`pijaca-${runStamp}`);
-    expect(today.slice(0, 7)).not.toBe(TARGET_MONTH);
+    expect(monthKey(today)).not.toBe(TARGET_MONTH);
   });
 
   it("retry istog zahteva vraća isti unos i ne pravi drugo pravilo", async () => {

@@ -102,6 +102,35 @@ export function monthNeighbors(month: string): MonthNeighbors {
   return { previous: previousMonthKey(month), next: nextMonthKey(month) };
 }
 
+/**
+ * Mesec `count` koraka unapred, ili `null` ako izlazi iz prihvaćenog prozora.
+ *
+ * Korak po korak kroz `nextMonthKey`, pa se ni prelazak godine ni gornja ivica
+ * prozora ne prepisuju ovde. Bez ovoga svako ko traži „nekoliko meseci unapred“
+ * piše svoju aritmetiku nad `Number(month.slice(5, 7)) + n`, koja na decembru
+ * daje trinaesti mesec.
+ */
+export function monthsAhead(month: string, count: number): string | null {
+  if (!Number.isInteger(count) || count < 0) {
+    throw new Error("Broj meseci mora biti ceo broj koji nije negativan.");
+  }
+
+  // Ulaz se potvrđuje i kad nema nijednog koraka, da `monthsAhead(x, 0)` ne
+  // bude jedini put kojim neispravan mesec prođe dalje.
+  monthParts(month);
+
+  let current = month;
+  for (let step = 0; step < count; step += 1) {
+    const next = nextMonthKey(current);
+    if (next === null) {
+      return null;
+    }
+    current = next;
+  }
+
+  return current;
+}
+
 type MembershipRow = {
   user_id: string;
   profiles: { display_name: string | null } | Array<{ display_name: string | null }> | null;

@@ -1,3 +1,4 @@
+import { monthKey, occurrenceDate } from "@finance/domain";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,6 +7,7 @@ import {
   monthNeighbors,
   monthParam,
   monthParts,
+  monthsAhead,
   nextMonthKey,
   previousMonthKey,
   selectPerson,
@@ -130,6 +132,124 @@ describe("granice meseca", () => {
       const { previous, next } = monthNeighbors(month);
       if (previous !== null) expect(isMonthKey(previous), `${month} ← ${previous}`).toBe(true);
       if (next !== null) expect(isMonthKey(next), `${month} → ${next}`).toBe(true);
+    }
+  });
+});
+
+describe("monthsAhead", () => {
+  it("nula koraka vraća isti mesec", () => {
+    expect(monthsAhead("2026-09", 0)).toBe("2026-09");
+  });
+
+  it("korak unutar iste godine", () => {
+    expect(monthsAhead("2026-01", 1)).toBe("2026-02");
+    expect(monthsAhead("2026-01", 5)).toBe("2026-06");
+    expect(monthsAhead("2026-07", 5)).toBe("2026-12");
+  });
+
+  it("prelazak godine ne daje trinaesti mesec", () => {
+    expect(monthsAhead("2026-08", 5)).toBe("2027-01");
+    expect(monthsAhead("2026-12", 1)).toBe("2027-01");
+    expect(monthsAhead("2026-12", 5)).toBe("2027-05");
+    expect(monthsAhead("2026-11", 14)).toBe("2028-01");
+  });
+
+  it("više od godine dana unapred prelazi tačan broj godina", () => {
+    expect(monthsAhead("2026-09", 12)).toBe("2027-09");
+    expect(monthsAhead("2026-09", 24)).toBe("2028-09");
+    expect(monthsAhead("2026-09", 27)).toBe("2028-12");
+  });
+
+  it("izlazak iz prozora je `null`, ne ključ koji validator odbija", () => {
+    expect(monthsAhead("2999-12", 1)).toBeNull();
+    expect(monthsAhead("2999-08", 5)).toBeNull();
+    expect(monthsAhead("2999-07", 5)).toBe("2999-12");
+  });
+
+  it("neispravan mesec se odbija i kad nema nijednog koraka", () => {
+    expect(() => monthsAhead("2026-13", 3)).toThrow(/YYYY-MM/);
+    expect(() => monthsAhead("2026-9", 0)).toThrow(/YYYY-MM/);
+    expect(() => monthsAhead("danas", 0)).toThrow(/YYYY-MM/);
+  });
+
+  it("broj koraka mora biti ceo broj koji nije negativan", () => {
+    expect(() => monthsAhead("2026-09", -1)).toThrow(/ceo broj/);
+    expect(() => monthsAhead("2026-09", 1.5)).toThrow(/ceo broj/);
+    expect(() => monthsAhead("2026-09", Number.NaN)).toThrow(/ceo broj/);
+  });
+
+  it("rezultat je uvek prihvaćen mesec, kroz ceo prozor", () => {
+    for (const month of ["1900-01", "2026-01", "2026-08", "2026-12", "2998-12", "2999-07"]) {
+      for (const count of [0, 1, 5, 12, 17]) {
+        const ahead = monthsAhead(month, count);
+        if (ahead !== null) {
+          expect(isMonthKey(ahead), `${month} +${count} → ${ahead}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("pomeranje je isto kao ponovljeni `nextMonthKey`", () => {
+    for (const month of ["2026-01", "2026-08", "2026-12", "2027-11"]) {
+      let stepwise: string | null = month;
+      for (let count = 0; count <= 15; count += 1) {
+        expect(monthsAhead(month, count), `${month} +${count}`).toBe(stepwise);
+        stepwise = stepwise === null ? null : nextMonthKey(stepwise);
+      }
+    }
+  });
+
+  it("svaki mesec u godini pomeren za pet koraka ostaje stvaran mesec", () => {
+    // Test šava bira ciljni mesec ovako; nijedan polazni mesec ne sme da ga obori.
+    for (let monthNumber = 1; monthNumber <= 12; monthNumber += 1) {
+      const start = `2026-${String(monthNumber).padStart(2, "0")}`;
+      const ahead = monthsAhead(start, 5);
+      expect(ahead, start).not.toBeNull();
+      expect(ahead).not.toBe(start);
+      expect(monthParts(ahead!).monthNumber).toBe(((monthNumber + 4) % 12) + 1);
+    }
+  });
+
+  it("izvedeni ciljni mesec ne zastareva kao upisan", () => {
+    // Test šava je nekada imao upisano `2027-02-17`. Čim taj mesec stigne,
+    // tvrdnja „ciljni mesec nije tekući" pada sama od sebe. Izvedeni mesec
+    // tog istog dana beži napred, pa tvrdnja i dalje stoji.
+    const expiringDay = "2027-02-17";
+
+    expect(monthKey(expiringDay)).toBe("2027-02");
+    expect(monthsAhead(monthKey(expiringDay), 5)).toBe("2027-07");
+    expect(monthsAhead(monthKey(expiringDay), 5)).not.toBe(monthKey(expiringDay));
+  });
+
+  it("sastav koji test šava koristi daje stvaran datum iz drugog meseca", () => {
+    // `monthKey → monthsAhead → monthParts → occurrenceDate`, tačno kao u
+    // `tests/novi-seam.test.ts`. Polazni dani su ivice: kraj kratkog meseca,
+    // kraj dugog, prelazak godine, prestupni dan.
+    const days = [
+      "2026-01-31",
+      "2026-02-28",
+      "2026-07-31",
+      "2026-08-31",
+      "2026-10-01",
+      "2026-11-30",
+      "2026-12-01",
+      "2026-12-31",
+      "2027-12-31",
+      "2028-02-29",
+      "1900-01-01",
+    ];
+
+    for (const day of days) {
+      const month = monthsAhead(monthKey(day), 5);
+      expect(month, day).not.toBeNull();
+
+      const { year, monthNumber } = monthParts(month!);
+      const target = occurrenceDate(year, monthNumber, 17);
+
+      expect(isMonthKey(month!), day).toBe(true);
+      expect(monthKey(target), day).toBe(month);
+      expect(monthKey(target), day).not.toBe(monthKey(day));
+      expect(target, day).toMatch(/^\d{4}-(0[1-9]|1[0-2])-17$/);
     }
   });
 });

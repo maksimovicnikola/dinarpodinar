@@ -1,0 +1,383 @@
+/*
+ * Dinar po dinar — kobaltno mastilo na bledom papiru štedne knjižice.
+ *
+ * Jedan potpisni motiv: linijar tekućeg salda (`.ruler`) — gusti sitni zubi sa
+ * svakim petim jačim, kao kolona salda u knjižici. Nigde drugde nema ukrasa.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Papir knjižice: hladan, bledo sivo-zelen. Namerno nije krem. */
+  --paper: #e8eae2;
+  --paper-sheet: #f6f7f2;
+  --paper-tint: #eef0e9;
+  --paper-edge: #d2d6c8;
+
+  /* Kobaltno mastilo */
+  --ink: #16306b;
+  --ink-strong: #0b1c45;
+  --ink-soft: #55658c;
+  --cobalt: #1f4fb5;
+  --cobalt-wash: #e3e9f8;
+
+  /* Linijar */
+  --rule: rgba(22, 48, 107, 0.16);
+  --rule-ink: rgba(22, 48, 107, 0.4);
+
+  /* Pečati */
+  --stamp-bad: #8c1d3f;
+  --stamp-bad-bg: #f6e8ec;
+  --stamp-good: #14543d;
+  --stamp-good-bg: #e4efe9;
+
+  --tick: 8px;
+  --radius: 3px;
+  --measure: 46rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background-color: var(--paper);
+  background-image: radial-gradient(120% 70% at 50% 0%, var(--paper-tint) 0%, transparent 70%);
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-weight: 600;
+  color: var(--ink-strong);
+  letter-spacing: -0.012em;
+  line-height: 1.12;
+  margin: 0;
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: clamp(1.75rem, 1.15rem + 2.4vw, 2.5rem);
+}
+
+h2 {
+  font-size: clamp(1.25rem, 1rem + 1vw, 1.5rem);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--cobalt);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+a:hover {
+  color: var(--ink-strong);
+}
+
+/* ---------- Potpisni motiv: linijar tekućeg salda ---------- */
+
+.ruler {
+  height: 11px;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--rule-ink);
+  background-image:
+    repeating-linear-gradient(to right, var(--rule-ink) 0 1px, transparent 1px calc(var(--tick) * 5)),
+    repeating-linear-gradient(to right, var(--rule) 0 1px, transparent 1px var(--tick));
+  background-size: 100% 11px, 100% 5px;
+  background-position: left bottom, left bottom;
+  background-repeat: repeat-x, repeat-x;
+}
+
+/* ---------- Okvir strane ---------- */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.masthead {
+  border-bottom: 1px solid var(--rule);
+}
+
+.masthead__inner,
+.shell__main,
+.shell__foot {
+  width: 100%;
+  max-width: var(--measure);
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 4vw, 2rem);
+}
+
+.masthead__inner {
+  padding-block: 1.25rem 0;
+}
+
+.masthead .ruler {
+  margin-top: 0.75rem;
+}
+
+.wordmark {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  color: var(--ink);
+}
+
+.shell__main {
+  flex: 1;
+  padding-block: clamp(1.75rem, 5vw, 3.25rem) 2.5rem;
+}
+
+.shell__foot {
+  padding-block: 0 2rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--ink-soft);
+}
+
+/* ---------- Knjižica ---------- */
+
+.passbook {
+  background: var(--paper-sheet);
+  border: 1px solid var(--paper-edge);
+  border-top: 2px solid var(--ink);
+  border-radius: var(--radius);
+  box-shadow: 0 14px 30px -26px rgba(11, 28, 69, 0.6);
+  padding: clamp(1.25rem, 4vw, 2.25rem);
+}
+
+.passbook__head {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.passbook__head .ruler {
+  margin-top: 0.75rem;
+}
+
+.eyebrow {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--ink-soft);
+}
+
+.lead {
+  font-size: 1.0625rem;
+  color: var(--ink-soft);
+  max-width: 38ch;
+}
+
+.stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.stack--tight {
+  gap: 0.625rem;
+}
+
+.stack--loose {
+  gap: 1.5rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+}
+
+.fine {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.amount {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--ink-strong);
+}
+
+/* ---------- Polja ---------- */
+
+.field {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.field__label {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-soft);
+}
+
+.field__hint {
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+/* Donja ivica je jača: red za upis, kao linija u knjižici. */
+.input {
+  font: inherit;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--ink-strong);
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-bottom: 2px solid var(--rule-ink);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.input::placeholder {
+  color: color-mix(in srgb, var(--ink-soft) 60%, transparent);
+}
+
+.input:hover {
+  border-bottom-color: var(--ink);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+  border-bottom-color: var(--cobalt);
+}
+
+.input--mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.input--short {
+  max-width: 8rem;
+}
+
+/* ---------- Dugmad ---------- */
+
+.button {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding-inline: 1.25rem;
+  color: var(--paper-sheet);
+  background: var(--ink);
+  border: 1px solid var(--ink-strong);
+  border-radius: var(--radius);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    transform 120ms ease;
+}
+
+.button:hover {
+  background: var(--cobalt);
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 3px;
+}
+
+.button:disabled {
+  cursor: progress;
+  opacity: 0.55;
+  transform: none;
+}
+
+.button--quiet {
+  color: var(--ink);
+  background: transparent;
+  border-color: var(--rule-ink);
+}
+
+.button--quiet:hover {
+  color: var(--ink-strong);
+  background: var(--cobalt-wash);
+}
+
+/* ---------- Pečati (poruke) ---------- */
+
+.notice {
+  font-size: 0.9375rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: var(--radius);
+  border-left: 3px solid currentcolor;
+}
+
+.notice--bad {
+  color: var(--stamp-bad);
+  background: var(--stamp-bad-bg);
+}
+
+.notice--good {
+  color: var(--stamp-good);
+  background: var(--stamp-good-bg);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .button:active {
+    transform: none;
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "jobs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "run": "tsx src/run-day.ts"
+  },
+  "dependencies": {
+    "@finance/domain": "workspace:*",
+    "@supabase/supabase-js": "^2.56.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

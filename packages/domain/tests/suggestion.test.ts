@@ -1,6 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
-import { growthFloorMinor, limitThresholds, suggest } from "../src/suggestion";
+import { growthFloorMinor, limitState, limitThresholds, suggest } from "../src/suggestion";
 import type { CategorySnapshot, EntrySnapshot } from "../src/types";
+
+describe("limitState", () => {
+  it("kategorija bez limita nema prag", () => {
+    expect(limitState(10, null)).toBe("free");
+    expect(limitState(5, 0)).toBe("free");
+  });
+
+  it("prati iste pragove kao upozorenja", () => {
+    expect(limitState(79, 100)).toBe("ok");
+    expect(limitState(80, 100)).toBe("near");
+    expect(limitState(99, 100)).toBe("near");
+    expect(limitState(100, 100)).toBe("over");
+    expect(limitState(150, 100)).toBe("over");
+  });
+});
 
 const food: CategorySnapshot = {
   id: "food",

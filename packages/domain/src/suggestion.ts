@@ -33,6 +33,16 @@ export function limitThresholds(
   return hit;
 }
 
+export type LimitState = "free" | "ok" | "near" | "over";
+
+export function limitState(spentMinor: number, limitMinor: number | null): LimitState {
+  if (limitMinor == null || limitMinor <= 0) return "free";
+  const hit = limitThresholds(spentMinor, limitMinor);
+  if (hit.includes(100)) return "over";
+  if (hit.includes(80)) return "near";
+  return "ok";
+}
+
 type PersonRollup = { id: string; name: string; amountMinor: number; entryCount: number };
 
 type Rollup = {

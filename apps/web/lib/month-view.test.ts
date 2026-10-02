@@ -6,6 +6,7 @@ import {
   buildMonthView,
   buildUpcoming,
   formatDate,
+  groupEntriesByDay,
   monthLabel,
 } from "./month-view";
 import type { CategoryRow, EntryDetail, RecurringSnapshot } from "./rows";
@@ -192,6 +193,8 @@ describe("buildMonthView — filter po osobi", () => {
       label: "4.000 RSD / 10.000 RSD",
       limited: true,
       over: false,
+      state: "ok",
+      percent: 40,
     });
     expect(view.alerts).toEqual(["Hrana je prešla 80% limita.", "Hrana je prešla 100% limita."]);
   });
@@ -225,6 +228,56 @@ describe("buildMonthView — filter po osobi", () => {
   });
 });
 
+describe("buildMonthView — stanje trake", () => {
+  function barFor(amountMinor: number, limitMinor: number | null) {
+    return buildMonthView({
+      currency: "RSD",
+      month: "2026-09",
+      categories: [{ ...HRANA, limitMinor }],
+      entries: [entry({ id: "1", amountMinor })],
+      previous: null,
+    }).bars[0];
+  }
+
+  it("boja trake prati iste pragove kao upozorenja", () => {
+    expect(barFor(790_000, 1_000_000)).toMatchObject({ state: "ok", percent: 79 });
+    expect(barFor(850_000, 1_000_000)).toMatchObject({ state: "near", percent: 85 });
+    expect(barFor(1_000_000, 1_000_000)).toMatchObject({ state: "over", percent: 100 });
+    expect(barFor(1_420_000, 1_000_000)).toMatchObject({ state: "over", percent: 142 });
+  });
+
+  it("kategorija bez limita nema procenat", () => {
+    expect(barFor(123_456, null)).toMatchObject({ state: "free", percent: null });
+  });
+});
+
+describe("groupEntriesByDay", () => {
+  it("grupiše unose po danu i čuva redosled liste", () => {
+    const rows = buildEntryList({
+      currency: "RSD",
+      month: "2026-09",
+      categories: [HRANA, PREVOZ],
+      entries: [
+        entry({ id: "a", occurredOn: "2026-09-02" }),
+        entry({ id: "b", occurredOn: "2026-09-05", amountMinor: 300_000 }),
+        entry({ id: "c", occurredOn: "2026-09-05", categoryId: "ride" }),
+        entry({ id: "d", occurredOn: "2026-09-02", amountMinor: 50_000 }),
+      ],
+    });
+
+    expect(
+      groupEntriesByDay(rows).map((day) => [day.occurredOn, day.date, day.rows.map((row) => row.id)]),
+    ).toEqual([
+      ["2026-09-05", "5.9.2026.", ["b", "c"]],
+      ["2026-09-02", "2.9.2026.", ["a", "d"]],
+    ]);
+  });
+
+  it("prazna lista nema dane", () => {
+    expect(groupEntriesByDay([])).toEqual([]);
+  });
+});
+
 describe("buildMonthView — trake", () => {
   it("kategorija bez limita ima punu traku i natpis bez limita", () => {
     const view = buildMonthView({
@@ -244,6 +297,8 @@ describe("buildMonthView — trake", () => {
         label: "1.234,56 RSD",
         limited: false,
         over: false,
+        state: "free",
+        percent: null,
       },
     ]);
     expect(view.alerts).toEqual([]);
@@ -325,6 +380,8 @@ describe("buildMonthView — trake", () => {
         label: "15.000 RSD / 10.000 RSD",
         limited: true,
         over: true,
+        state: "over",
+        percent: 150,
       },
     ]);
     expect(view.sentence).toBe("Hrana je 5.000 RSD preko limita. Najveći deo: Marko.");

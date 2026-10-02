@@ -10,8 +10,10 @@
 import {
   addCalendarDays,
   formatMoney,
+  limitState,
   limitThresholds,
   occurrenceDate,
+  type LimitState,
   suggest,
   summarizeMonth,
   type CategorySnapshot,
@@ -114,6 +116,10 @@ export type MonthBar = {
   limited: boolean;
   /** Potrošeno je dostiglo ili prešlo limit. */
   over: boolean;
+  /** Boja trake, istim pragovima kao upozorenja. */
+  state: LimitState;
+  /** Celi procenat limita, i preko 100; `null` bez limita. */
+  percent: number | null;
 };
 
 export type MonthAlert = {
@@ -207,6 +213,8 @@ export function buildMonthView(input: {
         label: `${formatMoney(category.spentMinor, input.currency)}${limitLabel}`,
         limited: Boolean(limitMinor),
         over: Boolean(limitMinor) && category.spentMinor >= (limitMinor ?? 0),
+        state: limitState(category.spentMinor, limitMinor),
+        percent: limitMinor ? Math.floor((category.spentMinor * 100) / limitMinor) : null,
       };
     });
 
@@ -291,6 +299,22 @@ export function buildEntryList(input: {
         automatic: entry.recurringRuleId !== null,
       };
     });
+}
+
+export type EntryDay = { occurredOn: string; date: string; rows: EntryRow[] };
+
+/** Uzastopni unosi istog dana idu pod jedno zaglavlje; redosled liste ostaje. */
+export function groupEntriesByDay(rows: readonly EntryRow[]): EntryDay[] {
+  const days: EntryDay[] = [];
+  for (const row of rows) {
+    const last = days[days.length - 1];
+    if (last && last.occurredOn === row.occurredOn) {
+      last.rows.push(row);
+    } else {
+      days.push({ occurredOn: row.occurredOn, date: row.date, rows: [row] });
+    }
+  }
+  return days;
 }
 
 export type UpcomingState = "uneto" | "prošlo" | "danas" | "predstoji";

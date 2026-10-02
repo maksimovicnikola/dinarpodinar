@@ -2,6 +2,9 @@
   "name": "jobs",
   "private": true,
   "type": "module",
+  "exports": {
+    "./run": "./src/run-day.ts"
+  },
   "scripts": {
     "test": "vitest run",
     "run": "tsx src/run-day.ts"

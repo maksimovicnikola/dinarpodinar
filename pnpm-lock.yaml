@@ -55,6 +55,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.56.0
         version: 2.117.2
+      jobs:
+        specifier: workspace:*
+        version: link:../jobs
       next:
         specifier: ^16.2.9
         version: 16.3.8(@types/node@24.19.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)

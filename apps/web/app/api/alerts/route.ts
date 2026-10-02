@@ -3,12 +3,29 @@ import { createClient } from "@supabase/supabase-js";
 import { monthKey, todayInBelgrade } from "@finance/domain";
 import { sendLimitAlerts } from "jobs/run";
 
+import { supabaseEnv } from "@/lib/supabase/env";
 import { createWritableServerSupabase } from "@/lib/supabase/server";
 
 export async function POST(request: Request) {
-  const { supabase, cookieFailure } = await createWritableServerSupabase();
-  const user = await supabase.auth.getUser();
-  if (cookieFailure() || !user.data.user) {
+  const authorization = request.headers.get("authorization") ?? "";
+  const bearer = authorization.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : "";
+  let supabase;
+  let userId: string | null = null;
+  if (bearer) {
+    const { url, anonKey } = supabaseEnv();
+    supabase = createClient(url, anonKey, {
+      global: { headers: { Authorization: `Bearer ${bearer}` } },
+      auth: { persistSession: false },
+    });
+    const user = await supabase.auth.getUser(bearer);
+    userId = user.data.user?.id ?? null;
+  } else {
+    const writable = await createWritableServerSupabase();
+    supabase = writable.supabase;
+    const user = await supabase.auth.getUser();
+    userId = writable.cookieFailure() ? null : (user.data.user?.id ?? null);
+  }
+  if (!userId) {
     return NextResponse.json({ error: "Prijava je obavezna" }, { status: 401 });
   }
   const body = (await request.json()) as { householdId?: string };
@@ -17,7 +34,7 @@ export async function POST(request: Request) {
     .from("memberships")
     .select("role")
     .eq("household_id", body.householdId)
-    .eq("user_id", user.data.user.id)
+    .eq("user_id", userId)
     .maybeSingle();
   if (membership.error) throw membership.error;
   if (!membership.data) return NextResponse.json({ error: "Zabranjeno" }, { status: 403 });

@@ -188,17 +188,15 @@ export default function OverviewScreen() {
               view.bars.map((bar) => (
                 <View key={bar.id} style={styles.bar}>
                   <View style={styles.barHead}>
-                    <View style={styles.barName}>
-                      <Text style={styles.name}>{bar.name}</Text>
-                      {bar.state === "near" || bar.state === "over" ? (
-                        <Tag tone={bar.state}>{`${bar.percent}%`}</Tag>
-                      ) : null}
-                    </View>
-                    <Text style={styles.barAmount}>
-                      <Text style={styles.barSpent}>{bar.spent}</Text>
-                      {bar.limit ? ` / ${bar.limit}` : ""}
-                    </Text>
+                    <Text style={styles.name}>{bar.name}</Text>
+                    {bar.state === "near" || bar.state === "over" ? (
+                      <Tag tone={bar.state}>{`${bar.percent}%`}</Tag>
+                    ) : null}
                   </View>
+                  <Text style={styles.barAmount}>
+                    <Text style={styles.barSpent}>{bar.spent}</Text>
+                    {bar.limit ? ` / ${bar.limit}` : ""}
+                  </Text>
                   <LimitBar width={bar.width} state={bar.state} />
                 </View>
               ))
@@ -273,10 +271,10 @@ const styles = StyleSheet.create({
   figure: { gap: 2 },
   verdict: { backgroundColor: colors.bg, borderRadius: 10, padding: space.md },
   verdictText: { ...type.small, color: colors.text },
-  bar: { gap: space.sm },
+  bar: { gap: 6 },
   barHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm },
   barName: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 },
-  name: { ...type.body, fontWeight: "500", color: colors.text },
+  name: { ...type.body, fontWeight: "500", color: colors.text, flexShrink: 1 },
   barAmount: { ...type.caption, color: colors.muted, fontVariant: ["tabular-nums"] },
   barSpent: { color: colors.text, fontWeight: "600" },
   dueRow: { flexDirection: "row", alignItems: "center", gap: space.md },

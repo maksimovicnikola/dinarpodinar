@@ -1,3 +1,4 @@
+import Constants from "expo-constants";
 import { Stack } from "expo-router";
 import * as Notifications from "expo-notifications";
 import { StatusBar } from "expo-status-bar";
@@ -9,18 +10,20 @@ import { colors } from "../lib/theme";
 export function usePushToken() {
   useEffect(() => {
     void (async () => {
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+      if (!projectId) return;
       const session = await supabase.auth.getSession();
       if (!session.data.session) return;
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== "granted") return;
-      const token = await Notifications.getExpoPushTokenAsync();
+      const token = await Notifications.getExpoPushTokenAsync({ projectId });
       const user = await supabase.auth.getUser();
       if (!user.data.user) return;
       await supabase.from("push_tokens").upsert({
         user_id: user.data.user.id,
         token: token.data,
       });
-    })();
+    })().catch(() => undefined);
   }, []);
 }
 

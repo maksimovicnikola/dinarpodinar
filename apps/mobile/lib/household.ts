@@ -10,6 +10,7 @@ export type Household = {
   householdId: string;
   name: string;
   currency: string;
+  role: "owner" | "member";
   categories: CategoryRow[];
   people: Person[];
 };
@@ -28,7 +29,7 @@ export async function loadHousehold(): Promise<HouseholdResult> {
 
   const membership = await supabase
     .from("memberships")
-    .select("household_id")
+    .select("household_id, role")
     .eq("user_id", userId)
     .order("household_id", { ascending: true })
     .limit(1)
@@ -51,6 +52,7 @@ export async function loadHousehold(): Promise<HouseholdResult> {
       householdId,
       name: household.data.name,
       currency: household.data.currency,
+      role: membership.data.role === "owner" ? "owner" : "member",
       categories: (categories.data ?? []).map((row) => ({
         id: row.id,
         name: row.name,

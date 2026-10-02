@@ -14,7 +14,7 @@ import { SymbolView } from "expo-symbols";
 import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 
-import { Amount, Card, LimitBar, Muted, Notice, Screen, Tag, Title } from "../../components/ui";
+import { Amount, Button, Card, Chip, Chips, LimitBar, Muted, Notice, Screen, Tag, Title } from "../../components/ui";
 import { dayLabel, monthTitle, shiftMonth } from "../../lib/format";
 import { loadHousehold } from "../../lib/household";
 import { toEntrySnapshot } from "../../lib/rows";
@@ -25,6 +25,7 @@ type Bar = { id: string; name: string; spent: string; limit: string | null; widt
 type Due = { id: string; name: string; date: string; amount: string; settled: boolean };
 type Overview = {
   householdName: string;
+  people: Array<{ id: string; name: string }>;
   leftover: string;
   leftoverNegative: boolean;
   income: string;
@@ -37,7 +38,9 @@ type Overview = {
 export default function OverviewScreen() {
   const router = useRouter();
   const [month, setMonth] = useState(() => monthKey(todayInBelgrade(new Date())));
+  const [personId, setPersonId] = useState("");
   const [view, setView] = useState<Overview | null>(null);
+  const [empty, setEmpty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -48,7 +51,9 @@ export default function OverviewScreen() {
       return;
     }
     if (result.status === "none") {
-      setMessage("Domaćinstvo se otvara na vebu. Kad postanete član, povucite ekran nadole.");
+      setEmpty(true);
+      setView(null);
+      setMessage(null);
       return;
     }
     if (result.status === "error") {
@@ -65,7 +70,7 @@ export default function OverviewScreen() {
         .in("month_key", earlier === null ? [month] : [month, earlier]),
       supabase
         .from("recurring_rules")
-        .select("id, category_id, amount_minor, day_of_month")
+        .select("id, category_id, person_id, amount_minor, day_of_month")
         .eq("household_id", household.householdId)
         .eq("active", true),
     ]);
@@ -75,8 +80,10 @@ export default function OverviewScreen() {
     }
 
     const all = (entries.data ?? []).map((row) => ({ ...toEntrySnapshot(row), ruleId: row.recurring_rule_id as string | null }));
-    const current: EntrySnapshot[] = all.filter((entry) => monthKey(entry.occurredOn) === month);
-    const previous = earlier === null ? null : all.filter((entry) => monthKey(entry.occurredOn) === earlier);
+    const person = household.people.find((candidate) => candidate.id === personId);
+    const scoped = person ? all.filter((entry) => entry.personId === person.id) : all;
+    const current: EntrySnapshot[] = scoped.filter((entry) => monthKey(entry.occurredOn) === month);
+    const previous = earlier === null ? null : scoped.filter((entry) => monthKey(entry.occurredOn) === earlier);
     const summary = summarizeMonth({ month, categories: household.categories, entries: current });
     const money = (minor: number) => formatMoney(minor, household.currency);
 
@@ -96,9 +103,10 @@ export default function OverviewScreen() {
       }));
 
     const [year, monthNumber] = month.split("-").map(Number);
-    const settled = new Set(all.filter((entry) => monthKey(entry.occurredOn) === month).map((entry) => entry.ruleId));
+    const settled = new Set(scoped.filter((entry) => monthKey(entry.occurredOn) === month).map((entry) => entry.ruleId));
     const names = new Map(household.categories.map((category) => [category.id, category.name]));
     const due = (rules.data ?? [])
+      .filter((rule) => !person || rule.person_id === person.id)
       .map((rule) => {
         const dueOn = occurrenceDate(year, monthNumber, rule.day_of_month);
         return {
@@ -112,23 +120,35 @@ export default function OverviewScreen() {
       })
       .sort((a, b) => (a.dueOn < b.dueOn ? -1 : 1));
 
+    setEmpty(false);
     setMessage(null);
     setView({
       householdName: household.name,
+      people: household.people,
       leftover: money(summary.leftoverMinor),
       leftoverNegative: summary.leftoverMinor < 0,
       income: money(summary.incomeMinor),
       expense: money(summary.expenseMinor),
-      sentence: suggest({
-        currency: household.currency,
-        categories: household.categories,
-        current,
-        previous,
-      }).sentence,
+      sentence: (person
+        ? suggest({
+            currency: household.currency,
+            categories: household.categories,
+            current,
+            previous,
+            personId: person.id,
+            personName: person.name,
+          })
+        : suggest({
+            currency: household.currency,
+            categories: household.categories,
+            current,
+            previous,
+          })
+      ).sentence,
       bars,
       due,
     });
-  }, [month, router]);
+  }, [month, personId, router]);
 
   useFocusEffect(
     useCallback(() => {
@@ -148,7 +168,14 @@ export default function OverviewScreen() {
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}>
       <View style={styles.header}>
-        <Muted>{view?.householdName ?? "Dinar po dinar"}</Muted>
+        <View style={styles.topLine}>
+          <Muted>{view?.householdName ?? "Dinar po dinar"}</Muted>
+          {view ? (
+            <Pressable accessibilityRole="button" onPress={() => router.push("/podesavanja")} hitSlop={8}>
+              <Text style={styles.settings}>Podešavanja</Text>
+            </Pressable>
+          ) : null}
+        </View>
         <View style={styles.stepper}>
           <StepButton label="Prethodni mesec" icon="chevron.left" disabled={!before} onPress={() => before && setMonth(before)} />
           <Text style={styles.month}>{monthTitle(month)}</Text>
@@ -156,7 +183,26 @@ export default function OverviewScreen() {
         </View>
       </View>
 
+      {view && view.people.length > 1 ? (
+        <Chips scroll>
+          <Chip on={personId === ""} onPress={() => setPersonId("")}>Svi</Chip>
+          {view.people.map((person) => (
+            <Chip key={person.id} on={personId === person.id} onPress={() => setPersonId(person.id)}>
+              {person.name}
+            </Chip>
+          ))}
+        </Chips>
+      ) : null}
+      {personId ? <Muted>Limit važi za celo domaćinstvo.</Muted> : null}
+
       {message ? <Notice>{message}</Notice> : null}
+      {empty ? (
+        <Card>
+          <Muted>Još nemate domaćinstvo. Otvorite ga ovde, ili prihvatite pozivnicu.</Muted>
+          <Button onPress={() => router.push("/novo")}>Otvori domaćinstvo</Button>
+          <Button quiet onPress={() => router.push("/poziv")}>Imam pozivnicu</Button>
+        </Card>
+      ) : null}
 
       {view ? (
         <>
@@ -255,6 +301,8 @@ function StepButton({
 
 const styles = StyleSheet.create({
   header: { gap: space.xs, paddingTop: space.sm, paddingBottom: space.xs },
+  topLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  settings: { ...type.small, fontWeight: "600", color: colors.accent },
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   month: { ...type.title, color: colors.text },
   step: {

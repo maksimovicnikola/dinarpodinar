@@ -44,6 +44,17 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
+export function BackTitle({ title, onBack }: { title: string; onBack: () => void }) {
+  return (
+    <View style={styles.backRow}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Nazad" onPress={onBack} hitSlop={8} style={styles.back}>
+        <Text style={styles.backMark}>‹</Text>
+      </Pressable>
+      <Text style={styles.title}>{title}</Text>
+    </View>
+  );
+}
+
 export function Title({ children }: { children: ReactNode }) {
   return <Text style={styles.title}>{children}</Text>;
 }
@@ -223,6 +234,18 @@ export const styles = StyleSheet.create({
     padding: space.lg,
     gap: space.md,
   },
+  backRow: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingTop: space.sm },
+  back: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.lineStrong,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  backMark: { fontSize: 24, lineHeight: 28, color: colors.text, marginTop: -2 },
   title: { ...type.title, color: colors.text },
   muted: { ...type.caption, color: colors.muted },
   label: { ...type.caption, fontWeight: "600", color: colors.text },

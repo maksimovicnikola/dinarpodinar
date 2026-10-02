@@ -1,12 +1,14 @@
 import { addCalendarDays, assertRemindDays, todayInBelgrade } from "@finance/domain";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useEffect, useState } from "react";
-import { KeyboardAvoidingView, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { Button, Chip, Chips, Input, Label, Muted, Notice, Screen, Segmented } from "../components/ui";
 import { dayLabel } from "../lib/format";
 import { loadHousehold, type Household } from "../lib/household";
+import { newRequestId } from "../lib/request-id";
 import { majorToMinor } from "../lib/rows";
 import { supabase } from "../lib/supabase";
 import { colors, radius, space, type } from "../lib/theme";
@@ -25,6 +27,8 @@ export default function NewEntryScreen() {
   const [personId, setPersonId] = useState("");
   const [when, setWhen] = useState<When>("today");
   const [otherDay, setOtherDay] = useState(today);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerReadyAt = useRef(0);
   const [note, setNote] = useState("");
   const [repeat, setRepeat] = useState(false);
   const [remindDays, setRemindDays] = useState(1);
@@ -50,11 +54,24 @@ export default function NewEntryScreen() {
   const visible = (household?.categories ?? [])
     .filter((category) => category.kind === kind && !category.archived)
     .sort((a, b) => a.name.localeCompare(b.name, "sr"));
-  const occurredOn = when === "today" ? today : when === "yesterday" ? yesterday : otherDay.trim();
+  const occurredOn = when === "today" ? today : when === "yesterday" ? yesterday : otherDay;
+  const pickerDate = useMemo(() => belgradeNoon(otherDay), [otherDay]);
 
   function chooseKind(next: Kind) {
     setKind(next);
     setCategoryId("");
+  }
+
+  function openPicker() {
+    pickerReadyAt.current = Date.now() + 400;
+    setWhen("other");
+    setPickerOpen(true);
+  }
+
+  function chooseDate(date: Date) {
+    setOtherDay(todayInBelgrade(date));
+    if (Date.now() < pickerReadyAt.current) return;
+    setPickerOpen(false);
   }
 
   async function onSubmit() {
@@ -72,7 +89,7 @@ export default function NewEntryScreen() {
       return;
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(occurredOn)) {
-      setError("Datum upišite kao GGGG-MM-DD.");
+      setError("Izaberite datum.");
       return;
     }
     setPending(true);
@@ -89,7 +106,7 @@ export default function NewEntryScreen() {
           p_note: note,
           p_day_of_month: Number(occurredOn.slice(8, 10)),
           p_remind_days: remindDays,
-          p_request_id: crypto.randomUUID(),
+          p_request_id: newRequestId(),
         });
         if (created.error) throw created.error;
       } else {
@@ -166,7 +183,7 @@ export default function NewEntryScreen() {
 
         <View style={styles.section}>
           <Label>Kategorija</Label>
-          {household && visible.length === 0 ? <Muted>Kategorije se dodaju na vebu, u podešavanjima.</Muted> : null}
+          {household && visible.length === 0 ? <Muted>Kategorije se dodaju u Podešavanjima.</Muted> : null}
           <Chips>
             {visible.map((category) => (
               <Chip key={category.id} on={categoryId === category.id} onPress={() => setCategoryId(category.id)}>
@@ -194,10 +211,12 @@ export default function NewEntryScreen() {
           <Chips>
             <Chip on={when === "today"} onPress={() => setWhen("today")}>Danas</Chip>
             <Chip on={when === "yesterday"} onPress={() => setWhen("yesterday")}>Juče</Chip>
-            <Chip on={when === "other"} onPress={() => setWhen("other")}>Drugi dan</Chip>
+            <Chip on={when === "other"} onPress={openPicker}>Drugi dan</Chip>
           </Chips>
           {when === "other" ? (
-            <Input value={otherDay} onChangeText={setOtherDay} placeholder="GGGG-MM-DD" autoCapitalize="none" />
+            <Pressable accessibilityRole="button" accessibilityLabel="Promeni datum" onPress={openPicker} style={styles.dateButton}>
+              <Text style={styles.dateButtonText}>{dayLabel(otherDay)}</Text>
+            </Pressable>
           ) : (
             <Muted>{dayLabel(occurredOn)}</Muted>
           )}
@@ -230,8 +249,31 @@ export default function NewEntryScreen() {
 
         {error ? <Notice>{error}</Notice> : null}
       </Screen>
+      <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
+        <View style={styles.backdrop}>
+          <Pressable accessibilityLabel="Zatvori kalendar" style={StyleSheet.absoluteFill} onPress={() => setPickerOpen(false)} />
+          <View style={styles.calendar}>
+            <DateTimePicker
+              value={pickerDate}
+              mode="date"
+              display="inline"
+              locale="sr-Latn"
+              timeZoneName="Europe/Belgrade"
+              themeVariant="light"
+              accentColor={colors.accent}
+              onValueChange={(_event, date) => chooseDate(date)}
+            />
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
+}
+
+/** 10:00 UTC je uvek isti kalendarski dan u Beogradu, i zimi i leti. */
+function belgradeNoon(isoDate: string): Date {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(Date.UTC(year, (month ?? 1) - 1, day ?? 1, 10));
 }
 
 function StepButton({
@@ -282,6 +324,29 @@ const styles = StyleSheet.create({
   },
   currency: { ...type.body, color: colors.muted, fontWeight: "500" },
   section: { gap: space.sm },
+  dateButton: {
+    alignSelf: "flex-start",
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+    justifyContent: "center",
+  },
+  dateButtonText: { ...type.small, fontWeight: "600", color: colors.text },
+  backdrop: {
+    flex: 1,
+    justifyContent: "center",
+    padding: space.lg,
+    backgroundColor: "rgba(20, 23, 28, 0.4)",
+  },
+  calendar: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    overflow: "hidden",
+    minHeight: 360,
+  },
   repeat: {
     backgroundColor: colors.surface,
     borderRadius: radius.card,

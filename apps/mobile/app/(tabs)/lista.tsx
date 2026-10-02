@@ -1,9 +1,9 @@
 import { formatMoney, monthKey } from "@finance/domain";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 
-import { Card, Chip, Chips, Label, Muted, Notice, Screen, Tag } from "../../components/ui";
+import { Button, Card, Chip, Chips, Label, Muted, Notice, Screen, Tag } from "../../components/ui";
 import { dayLabel, monthTitle } from "../../lib/format";
 import { loadHousehold, type Household } from "../../lib/household";
 import { supabase } from "../../lib/supabase";
@@ -29,6 +29,7 @@ export default function EntriesScreen() {
   const [categoryId, setCategoryId] = useState("");
   const [month, setMonth] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [empty, setEmpty] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -38,11 +39,9 @@ export default function EntriesScreen() {
       return;
     }
     if (result.status !== "ok") {
-      setMessage(
-        result.status === "none"
-          ? "Domaćinstvo se otvara na vebu. Kad postanete član, povucite ekran nadole."
-          : "Unosi se ne otvaraju. Proverite vezu i povucite ekran nadole.",
-      );
+      setEmpty(result.status === "none");
+      setHousehold(null);
+      setMessage(result.status === "none" ? null : "Unosi se ne otvaraju. Proverite vezu i povucite ekran nadole.");
       return;
     }
     const entries = await supabase
@@ -54,6 +53,7 @@ export default function EntriesScreen() {
       setMessage("Unosi se ne otvaraju. Proverite vezu i povucite ekran nadole.");
       return;
     }
+    setEmpty(false);
     setMessage(null);
     setHousehold(result.household);
     setRows((entries.data ?? []) as Row[]);
@@ -97,6 +97,13 @@ export default function EntriesScreen() {
         <Text style={styles.heading}>Unosi</Text>
       </View>
       {message ? <Notice>{message}</Notice> : null}
+      {empty ? (
+        <Card>
+          <Muted>Još nemate domaćinstvo. Otvorite ga ovde, ili prihvatite pozivnicu.</Muted>
+          <Button onPress={() => router.push("/novo")}>Otvori domaćinstvo</Button>
+          <Button quiet onPress={() => router.push("/poziv")}>Imam pozivnicu</Button>
+        </Card>
+      ) : null}
 
       <View style={styles.filters}>
         <Label>Mesec</Label>
@@ -143,7 +150,13 @@ export default function EntriesScreen() {
           <Muted style={styles.dayHead}>{dayLabel(day.date)}</Muted>
           <Card style={styles.group}>
             {day.rows.map((row, index) => (
-              <View key={row.id} style={[styles.entry, index > 0 ? styles.entryLine : null]}>
+              <Pressable
+                key={row.id}
+                disabled={household?.role !== "owner"}
+                accessibilityRole={household?.role === "owner" ? "button" : undefined}
+                onPress={() => router.push(`/unos/${row.id}`)}
+                style={[styles.entry, index > 0 ? styles.entryLine : null]}
+              >
                 <View style={{ flex: 1, gap: 2 }}>
                   <View style={styles.entryName}>
                     <Text style={styles.name}>{categoryName.get(row.category_id) ?? "Kategorija"}</Text>
@@ -154,7 +167,7 @@ export default function EntriesScreen() {
                 <Text style={[styles.amount, row.kind === "income" ? { color: colors.accent } : null]}>
                   {`${row.kind === "income" ? "+" : "−"}${formatMoney(row.amount_minor, currency)}`}
                 </Text>
-              </View>
+              </Pressable>
             ))}
           </Card>
         </View>

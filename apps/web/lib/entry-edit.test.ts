@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { monthLabel } from "./month-view";
 import { CATEGORY_GONE, type Parsed } from "./settings";
 import {
   ENTRY_CATEGORY_ARCHIVED,
@@ -16,6 +17,8 @@ import {
   confirmedDelete,
   entryEditBlocker,
   entryEditErrorMessage,
+  entryMonth,
+  entryMonthLabel,
   entryMonthPath,
   entryUpdatePayload,
   initialCategoryId,
@@ -392,13 +395,76 @@ describe("entryUpdatePayload", () => {
 // Kuda posle izmene
 // ----------------------------------------------------------------
 
+describe("entryMonth", () => {
+  it("vraća mesec datuma unosa", () => {
+    expect(entryMonth("2026-09-02")).toBe("2026-09");
+  });
+
+  it("ivice prozora su meseci, prvi korak van njega nije", () => {
+    expect(entryMonth("1900-01-01")).toBe("1900-01");
+    expect(entryMonth("2999-12-31")).toBe("2999-12");
+    expect(entryMonth("1899-12-31")).toBeNull();
+    expect(entryMonth("3000-01-01")).toBeNull();
+  });
+
+  it("datum koji Postgres prima, a aplikacija ne otvara, nije mesec", () => {
+    // `date` u bazi ide od 4713. p. n. e. do 5874897. n. e.; prozor je uži.
+    for (const occurredOn of ["0001-01-01", "0005-03-02", "1066-10-14", "5874897-12-31"]) {
+      expect(entryMonth(occurredOn), occurredOn).toBeNull();
+    }
+  });
+
+  it("nedostajuć i neispravan datum nisu mesec", () => {
+    for (const occurredOn of ["nije-datum", "", null, undefined]) {
+      expect(entryMonth(occurredOn), String(occurredOn)).toBeNull();
+    }
+  });
+});
+
+describe("entryMonthLabel", () => {
+  it("natpis meseca na srpskom", () => {
+    expect(entryMonthLabel("2026-09-02")).toBe("septembar 2026.");
+    expect(entryMonthLabel("1900-01-01")).toBe("januar 1900.");
+    expect(entryMonthLabel("2999-12-31")).toBe("decembar 2999.");
+  });
+
+  it("datum van prozora ostaje bez natpisa, i ne baca", () => {
+    // Bez ovoga jedan takav red obori celu stranu na kojoj se datum popravlja.
+    for (const occurredOn of ["1899-12-31", "1899-01-01", "3000-01-01", "9999-06-15"]) {
+      expect(entryMonthLabel(occurredOn), occurredOn).toBeNull();
+    }
+  });
+
+  it("nedostajuć datum ostaje bez natpisa", () => {
+    expect(entryMonthLabel(null)).toBeNull();
+    expect(entryMonthLabel(undefined)).toBeNull();
+    expect(entryMonthLabel("nije-datum")).toBeNull();
+  });
+
+  it("čuvar postoji jer `monthLabel` na takav mesec baca", () => {
+    // Ovo je tvrdnja o razlogu: kad bi `monthLabel` sam vraćao rezervu, guard
+    // bi bio suvišan i smeo da se skine.
+    expect(() => monthLabel("1899-12")).toThrow();
+    expect(() => monthLabel("3000-01")).toThrow();
+    expect(monthLabel("2026-09")).toBe("septembar 2026.");
+  });
+});
+
 describe("entryMonthPath", () => {
   it("vodi u mesec datuma unosa", () => {
     expect(entryMonthPath(DOM, "2026-09-02")).toBe(`/h/${DOM}?month=2026-09`);
   });
 
   it("datum van prozora koji se otvara pada na tekući mesec domaćinstva", () => {
-    for (const occurredOn of ["1899-12-31", "3000-01-01", "nije-datum", "", null, undefined]) {
+    for (const occurredOn of [
+      "1899-12-31",
+      "3000-01-01",
+      "0001-01-01",
+      "nije-datum",
+      "",
+      null,
+      undefined,
+    ]) {
       expect(entryMonthPath(DOM, occurredOn), String(occurredOn)).toBe(`/h/${DOM}`);
     }
   });
@@ -406,6 +472,14 @@ describe("entryMonthPath", () => {
   it("ivice prozora su i dalje meseci", () => {
     expect(entryMonthPath(DOM, "1900-01-01")).toBe(`/h/${DOM}?month=1900-01`);
     expect(entryMonthPath(DOM, "2999-12-31")).toBe(`/h/${DOM}?month=2999-12`);
+  });
+
+  it("natpis i navigacija odlučuju isto za isti datum", () => {
+    for (const occurredOn of ["2026-09-02", "1899-12-31", "3000-01-01", "nije-datum"]) {
+      const labelled = entryMonthLabel(occurredOn) !== null;
+      const navigable = entryMonthPath(DOM, occurredOn).includes("?month=");
+      expect(navigable, occurredOn).toBe(labelled);
+    }
   });
 });
 

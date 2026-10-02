@@ -625,6 +625,120 @@ describe("strana unosa", () => {
 });
 
 // ----------------------------------------------------------------
+// Datum van prozora koji aplikacija otvara
+//
+// Forma prima samo godine 1900–2999, ali Postgres `date` prima mnogo šire, pa
+// takav red može da uđe direktno kroz PostgREST. Strana ga zato čita i
+// iscrtava: natpis meseca otpada, a navigacija pada na mesečni pregled bez
+// `?month=`. Bez toga bi jedan takav red oborio stranu na kojoj se datum i
+// popravlja.
+// ----------------------------------------------------------------
+
+describe("unos sa datumom van prozora", () => {
+  const OUT_OF_WINDOW: ReadonlyArray<readonly [string, string, string]> = [
+    ["ispod prozora", "1899-06-15", "15.6.1899."],
+    ["iznad prozora", "3000-06-15", "15.6.3000."],
+  ];
+
+  for (const [label, occurredOn, shownDate] of OUT_OF_WINDOW) {
+    it(`vlasniku se strana otvara (${label})`, async () => {
+      const entry = await seedEntry({
+        householdId: domA,
+        categoryId: hranaA,
+        personId: ana.id,
+        createdBy: ana.id,
+        occurredOn,
+        note: `prozor-${label}-${runStamp}`,
+      });
+
+      const page = await get(`/h/${domA}/unos/${entry}`, ana.cookie);
+
+      expect(page.status).toBe(200);
+      expect(page.markup).toContain("Izmena unosa");
+      expect(page.markup).toContain(shownDate);
+      expect(page.markup).toContain(`value="${occurredOn}"`);
+      expect(page.markup).toContain(">Sačuvaj izmenu</button>");
+      expect(page.markup).not.toContain("Zastoj");
+      expect(page.markup).not.toContain("Unos se ne otvara");
+
+      // Navigacija pada na mesečni pregled bez `?month=`.
+      expect(page.markup).toContain(`href="/h/${domA}"`);
+      expect(page.body).not.toContain(`?month=${occurredOn.slice(0, 7)}`);
+    });
+
+    it(`članu se strana otvara (${label})`, async () => {
+      const entry = await seedEntry({
+        householdId: domA,
+        categoryId: hranaA,
+        personId: marko.id,
+        createdBy: marko.id,
+        occurredOn,
+        note: `prozor-clan-${label}-${runStamp}`,
+      });
+
+      const page = await get(`/h/${domA}/unos/${entry}`, marko.cookie);
+
+      expect(page.status).toBe(200);
+      expect(page.markup).toContain("Unos menja vlasnik.");
+      expect(page.markup).not.toContain("Zastoj");
+    });
+  }
+
+  it("čuvanje traži datum iz prozora, pa unos nije u ćorsokaku", async () => {
+    const entry = await seedEntry({
+      householdId: domA,
+      categoryId: hranaA,
+      personId: ana.id,
+      createdBy: ana.id,
+      occurredOn: "1899-06-15",
+      note: `prozor-popravka-${runStamp}`,
+    });
+
+    const fields = {
+      dom: domA,
+      unos: entry,
+      iznos: "1.000",
+      kategorija: hranaA,
+      osoba: ana.id,
+      beleska: `prozor-popravka-${runStamp}`,
+    };
+
+    // Zatečen datum se ne prihvata — forma ga ne bi ni ponudila.
+    const refused = await act(ana, () =>
+      updateEntryAction(EMPTY, form({ ...fields, datum: "1899-06-15" })),
+    );
+    expect(denial(refused).ok).toBe(false);
+    expect((await requireEntry(entry)).occurred_on).toBe("1899-06-15");
+
+    // Popravljen datum prolazi i vodi u svoj mesec.
+    const saved = await act(ana, () =>
+      updateEntryAction(EMPTY, form({ ...fields, datum: dayIn(MONTH_ONE, 15) })),
+    );
+    expect(saved.digest, saved.state?.message ?? "").toContain(`/h/${domA}?month=${MONTH_ONE}`);
+    expect((await requireEntry(entry)).occurred_on).toBe(dayIn(MONTH_ONE, 15));
+  });
+
+  it("brisanje vraća na mesečni pregled bez meseca", async () => {
+    const entry = await seedEntry({
+      householdId: domA,
+      categoryId: hranaA,
+      personId: ana.id,
+      createdBy: ana.id,
+      occurredOn: "3000-06-15",
+      note: `prozor-brisanje-${runStamp}`,
+    });
+
+    const outcome = await act(ana, () =>
+      deleteEntryAction(EMPTY, form({ dom: domA, unos: entry, potvrda: "da" })),
+    );
+
+    expect(outcome.digest, outcome.state?.message ?? "").toContain(`/h/${domA}`);
+    expect(outcome.digest).not.toContain("?month=");
+    expect(await readEntry(entry)).toBeNull();
+  });
+});
+
+// ----------------------------------------------------------------
 // Vlasnik menja
 // ----------------------------------------------------------------
 

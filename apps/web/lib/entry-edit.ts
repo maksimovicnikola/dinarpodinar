@@ -18,6 +18,7 @@ import { monthKey, type EntryKind } from "@finance/domain";
 
 import { categoriesOfKind, entryErrorMessage, isCalendarDate } from "./entry-form";
 import { FALLBACK_PERSON_NAME, isMonthKey, type Person } from "./month-query";
+import { monthLabel } from "./month-view";
 import { uuidParam } from "./next-path";
 import { majorToMinor } from "./rows";
 import { CATEGORY_GONE, type Parsed } from "./settings";
@@ -334,13 +335,39 @@ export function entryUpdatePayload(fields: EntryEditFields): {
  */
 export function entryMonthPath(householdId: string, occurredOn: string | null | undefined): string {
   const base = `/h/${householdId}`;
+  const month = entryMonth(occurredOn);
 
+  return month === null ? base : `${base}?month=${month}`;
+}
+
+/**
+ * Mesec unosa, ili `null` ako taj mesec aplikacija ne otvara.
+ *
+ * Datum u bazi je `date`, a Postgres prima i godine koje ovaj prozor ne
+ * pokriva. Takav red se ne pravi kroz formu, ali može da uđe direktno kroz
+ * PostgREST, pa se i čita.
+ */
+export function entryMonth(occurredOn: string | null | undefined): string | null {
   if (typeof occurredOn !== "string") {
-    return base;
+    return null;
   }
 
   const month = monthKey(occurredOn);
-  return isMonthKey(month) ? `${base}?month=${month}` : base;
+  return isMonthKey(month) ? month : null;
+}
+
+/**
+ * Natpis meseca za naslov strane, ili `null` kad ga nema.
+ *
+ * `monthLabel` baca na mesec van prozora (`monthParts` ga odbija), a strana ga
+ * iscrtava usred naslova — bačena greška bi od jednog takvog reda napravila
+ * stranu koja se ne otvara ni da se datum popravi. Zato se pita, ne pogađa:
+ * bez natpisa ostaje sam datum, a navigacija pada na mesečni pregled bez
+ * `?month=` (`entryMonthPath`).
+ */
+export function entryMonthLabel(occurredOn: string | null | undefined): string | null {
+  const month = entryMonth(occurredOn);
+  return month === null ? null : monthLabel(month);
 }
 
 // ----------------------------------------------------------------

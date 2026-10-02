@@ -1,4 +1,4 @@
-import { formatMoney, monthKey } from "@finance/domain";
+import { formatMoney } from "@finance/domain";
 import { redirect } from "next/navigation";
 
 import { Passbook, PassbookHeader, Ruler } from "@/components/passbook";
@@ -6,6 +6,7 @@ import { Problem } from "@/components/problem";
 import {
   categoryChoices,
   entryEditBlocker,
+  entryMonthLabel,
   entryMonthPath,
   initialCategoryId,
   parseEntryKind,
@@ -13,7 +14,7 @@ import {
   type EditCategory,
 } from "@/lib/entry-edit";
 import { buildPeople, FALLBACK_PERSON_NAME } from "@/lib/month-query";
-import { formatDate, monthLabel } from "@/lib/month-view";
+import { formatDate } from "@/lib/month-view";
 import { loginPathWithNext, uuidParam } from "@/lib/next-path";
 import { canManage } from "@/lib/rows";
 import { minorToInput } from "@/lib/settings";
@@ -184,13 +185,18 @@ export default async function EntryPage({
   const amount = formatMoney(entry.data.amount_minor, household.data.currency);
   const date = formatDate(occurredOn);
 
+  // Datum van prozora koji aplikacija otvara (1900–2999) ne može da nastane
+  // kroz formu, ali može kroz direktan upis u bazu. Takav red ostaje bez
+  // natpisa meseca umesto da obori stranu na kojoj se datum i popravlja.
+  const month = entryMonthLabel(occurredOn);
+
   return (
     <>
       <Passbook>
         <PassbookHeader
           eyebrow="Izmena unosa"
           title={householdName}
-          lead={`${monthLabel(monthKey(occurredOn))} — ${date}`}
+          lead={month === null ? date : `${month} — ${date}`}
         />
 
         <p className="fine">

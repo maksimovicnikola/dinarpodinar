@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 
 import { supabase } from "../../lib/supabase";
+import { colors, type } from "../../lib/theme";
 
 function queryValue(url: string, key: string): string | null {
   const query = url.split("?")[1]?.split("#")[0] ?? "";
@@ -37,8 +38,8 @@ export default function AuthCallback() {
   }, [router, url]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#f4efe4", justifyContent: "center", padding: 24 }}>
-      <Text>{message}</Text>
+    <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: "center", padding: 24 }}>
+      <Text style={{ ...type.body, color: colors.text, textAlign: "center" }}>{message}</Text>
     </View>
   );
 }

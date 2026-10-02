@@ -1,9 +1,11 @@
 import * as AppleAuthentication from "expo-apple-authentication";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Platform, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 
+import { Button, Card, Input, Label, Muted, Notice, Screen } from "../components/ui";
 import { supabase } from "../lib/supabase";
+import { colors, space, type } from "../lib/theme";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -105,7 +107,9 @@ export default function LoginScreen() {
       });
       if (result.error) {
         setError("Prijava preko Apple-a nije uspela.");
+        return;
       }
+      router.replace("/");
     } catch {
       setError("Prijava preko Apple-a nije uspela.");
     } finally {
@@ -114,55 +118,79 @@ export default function LoginScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#f4efe4", padding: 24, justifyContent: "center", gap: 12 }}>
-      <Text style={{ fontSize: 13, letterSpacing: 1, color: "#6b6256" }}>DINAR PO DINAR</Text>
-      <Text style={{ fontSize: 32, color: "#1c1915" }}>Otvorite svoju knjižicu</Text>
-      <Text style={{ color: "#3d3832" }}>Nema šifre. Ime i e-pošta, pa kod za jednu prijavu.</Text>
-      <TextInput
-        value={name}
-        onChangeText={setName}
-        placeholder="Ime"
-        autoCapitalize="words"
-        style={{ borderBottomWidth: 1, borderColor: "#1c1915", paddingVertical: 10, fontSize: 18 }}
-      />
-      <TextInput
-        value={email}
-        onChangeText={setEmail}
-        placeholder="E-pošta"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        style={{ borderBottomWidth: 1, borderColor: "#1c1915", paddingVertical: 10, fontSize: 18 }}
-      />
-      {error ? <Text style={{ color: "#8a2b1b" }}>{error}</Text> : null}
-      {sentTo ? (
-        <>
-          <Text>Kod je poslat na {sentTo}.</Text>
-          <TextInput
-            value={code}
-            onChangeText={setCode}
-            placeholder="Kod iz mejla"
-            keyboardType="number-pad"
-            textContentType="oneTimeCode"
-            maxLength={6}
-            style={{ borderBottomWidth: 1, borderColor: "#1c1915", paddingVertical: 10, fontSize: 24, letterSpacing: 4 }}
-          />
-          <Pressable onPress={() => void onVerify()} disabled={pending} style={{ backgroundColor: "#1c1915", padding: 14 }}>
-            <Text style={{ color: "#f4efe4", textAlign: "center" }}>{pending ? "Proveravam…" : "Prijavi me"}</Text>
-          </Pressable>
-        </>
-      ) : null}
-      <Pressable
-        onPress={() => void onSubmit()}
-        disabled={pending}
-        style={sentTo ? { padding: 14, borderWidth: 1, borderColor: "#1c1915" } : { backgroundColor: "#1c1915", padding: 14 }}
-      >
-        <Text style={sentTo ? { textAlign: "center" } : { color: "#f4efe4", textAlign: "center" }}>
-          {pending ? "Šaljem…" : sentTo ? "Pošalji novi kod" : "Pošalji kod"}
-        </Text>
-      </Pressable>
-      <Pressable onPress={() => void onApple()} disabled={pending} style={{ padding: 14, borderWidth: 1, borderColor: "#1c1915" }}>
-        <Text style={{ textAlign: "center" }}>Nastavi sa Apple-om</Text>
-      </Pressable>
-    </View>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <Screen>
+        <View style={styles.hero}>
+          <Text style={styles.brand}>Dinar po dinar</Text>
+          <Text style={styles.heading}>{sentTo ? "Upišite kod" : "Prijava"}</Text>
+          <Muted style={styles.lead}>
+            {sentTo
+              ? `Poslali smo šestocifreni kod na ${sentTo}.`
+              : "Bez lozinke. Upišite ime i e-poštu, a mi šaljemo kod za prijavu."}
+          </Muted>
+        </View>
+
+        {sentTo ? (
+          <Card>
+            <Input
+              value={code}
+              onChangeText={setCode}
+              placeholder="000000"
+              keyboardType="number-pad"
+              textContentType="oneTimeCode"
+              autoFocus
+              maxLength={6}
+              accessibilityLabel="Kod iz mejla"
+              style={styles.code}
+            />
+            {error ? <Notice>{error}</Notice> : null}
+            <Button onPress={() => void onVerify()} disabled={pending}>
+              {pending ? "Proveravam…" : "Prijavi me"}
+            </Button>
+            <Button quiet onPress={() => void onSubmit()} disabled={pending}>
+              Pošalji novi kod
+            </Button>
+          </Card>
+        ) : (
+          <Card>
+            <View style={styles.field}>
+              <Label>Ime</Label>
+              <Input value={name} onChangeText={setName} placeholder="Kako da vas zovemo" autoCapitalize="words" textContentType="givenName" />
+            </View>
+            <View style={styles.field}>
+              <Label>E-pošta</Label>
+              <Input
+                value={email}
+                onChangeText={setEmail}
+                placeholder="ime@primer.rs"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                textContentType="emailAddress"
+              />
+            </View>
+            {error ? <Notice>{error}</Notice> : null}
+            <Button onPress={() => void onSubmit()} disabled={pending}>
+              {pending ? "Šaljem…" : "Pošalji kod"}
+            </Button>
+          </Card>
+        )}
+
+        {sentTo ? null : (
+          <Button quiet onPress={() => void onApple()} disabled={pending}>
+            Nastavi sa Apple-om
+          </Button>
+        )}
+      </Screen>
+    </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  hero: { gap: space.sm, paddingTop: space.xxl, paddingBottom: space.md },
+  brand: { ...type.small, fontWeight: "600", color: colors.accent },
+  heading: { ...type.display, color: colors.text },
+  lead: { ...type.body },
+  field: { gap: space.sm },
+  code: { fontSize: 28, lineHeight: 34, letterSpacing: 8, textAlign: "center", fontVariant: ["tabular-nums"], minHeight: 60 },
+});

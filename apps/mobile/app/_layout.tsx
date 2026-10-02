@@ -1,8 +1,10 @@
 import { Stack } from "expo-router";
 import * as Notifications from "expo-notifications";
+import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 
 import { supabase } from "../lib/supabase";
+import { colors } from "../lib/theme";
 
 export function usePushToken() {
   useEffect(() => {
@@ -24,5 +26,14 @@ export function usePushToken() {
 
 export default function RootLayout() {
   usePushToken();
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <>
+      <StatusBar style="dark" />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="novi" options={{ presentation: "modal" }} />
+      </Stack>
+    </>
+  );
 }

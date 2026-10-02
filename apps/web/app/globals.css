@@ -22,11 +22,12 @@
   --near-soft: #fbf3e6;
   --over: #c0362c;
   --over-soft: #fcedeb;
+  --plus: #1f7a4d;
 
   --radius: 12px;
   --radius-control: 10px;
-  --narrow: 35rem;
-  --wide: 72rem;
+  --narrow: 44rem;
+  --wide: 92rem;
   --gutter: clamp(1rem, 4vw, 2rem);
 }
 
@@ -120,6 +121,8 @@ a:hover {
 .masthead__inner {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   min-height: 3.5rem;
 }
 
@@ -164,6 +167,55 @@ a:hover {
 
 .passbook + .passbook {
   margin-top: 1rem;
+}
+
+/* Podešavanja koriste širinu pregleda, u dva stuba, sa više vazduha. */
+.settings {
+  display: grid;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: var(--wide);
+  margin-inline: auto;
+}
+
+.settings .passbook {
+  max-width: none;
+  margin-inline: 0;
+  padding: clamp(1.5rem, 3vw, 2.25rem);
+}
+
+.settings .passbook + .passbook {
+  margin-top: 0;
+}
+
+.settings > .passbook:first-child {
+  grid-column: 1 / -1;
+}
+
+.settings .stack--loose {
+  gap: 2rem;
+}
+
+.settings .group {
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+}
+
+@media (min-width: 70rem) {
+  .settings {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+    align-items: start;
+  }
+
+  .settings__main {
+    grid-column: 1;
+  }
+
+  .settings__side {
+    grid-column: 2;
+    display: grid;
+    gap: 1.5rem;
+  }
 }
 
 .passbook > h2 {
@@ -256,6 +308,10 @@ a:hover {
   color: var(--over);
 }
 
+.amount--plus {
+  color: var(--plus);
+}
+
 .amount--in {
   color: var(--text);
 }
@@ -288,6 +344,13 @@ a:hover {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-control);
   transition: border-color 120ms ease;
+}
+
+.input--code {
+  font-size: 1.75rem;
+  letter-spacing: 0.35em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 select.input {

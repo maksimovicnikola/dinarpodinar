@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Onest } from "next/font/google";
 
+import { Masthead } from "@/components/masthead";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,13 +27,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="sr" className={sans.variable}>
       <body>
         <div className="shell">
-          <header className="masthead">
-            <div className="masthead__inner">
-              <a className="wordmark" href="/">
-                Dinar po dinar
-              </a>
-            </div>
-          </header>
+          <Masthead />
           <main className="shell__main">{children}</main>
         </div>
       </body>

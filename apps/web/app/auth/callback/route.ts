@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { loginErrorPath, planCallback } from "@/lib/auth-callback";
+import { loginNamePath, needsDisplayName } from "@/lib/display-name";
 import { createWritableServerSupabase, isImmutableCookieError } from "@/lib/supabase/server";
 
 /** Odgovor sa kolačićima sesije ne sme da uđe u keš posrednika. */
@@ -22,13 +23,16 @@ export async function GET(request: NextRequest) {
   }
 
   const { supabase, cookieFailure } = await createWritableServerSupabase();
+  let askName = false;
 
   try {
-    const { error } = await supabase.auth.exchangeCodeForSession(plan.code);
+    const exchanged = await supabase.auth.exchangeCodeForSession(plan.code);
 
-    if (error) {
+    if (exchanged.error) {
       return redirectTo(loginErrorPath("razmena"), url.origin);
     }
+
+    askName = needsDisplayName(exchanged.data.user?.user_metadata);
   } catch (caught) {
     // Razmena može da padne i zbog upisa kolačića (npr. kad je ovo pozvano van
     // rute). Razdvajamo to od neuspele razmene da poruka članu bude tačna.
@@ -49,5 +53,5 @@ export async function GET(request: NextRequest) {
     return redirectTo(loginErrorPath("kolacici"), url.origin);
   }
 
-  return redirectTo(plan.next, url.origin);
+  return redirectTo(askName ? loginNamePath(plan.next) : plan.next, url.origin);
 }

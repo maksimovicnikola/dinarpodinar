@@ -74,7 +74,7 @@ export function Amount({
 }: {
   children: ReactNode;
   size?: "small" | "body" | "title" | "display";
-  tone?: "text" | "over";
+  tone?: "text" | "over" | "plus";
 }) {
   return (
     <Text
@@ -83,6 +83,7 @@ export function Amount({
         styles.amount,
         size === "body" || size === "small" ? styles.amountStrong : null,
         tone === "over" ? { color: colors.over } : null,
+        tone === "plus" ? { color: colors.plus } : null,
       ]}
     >
       {children}
@@ -142,7 +143,12 @@ export function Chip({
 export function Chips({ children, scroll = false }: { children: ReactNode; scroll?: boolean }) {
   if (scroll) {
     return (
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.chipsScroll}
+        contentContainerStyle={styles.chipsRow}
+      >
         {children}
       </ScrollView>
     );
@@ -262,7 +268,8 @@ export const styles = StyleSheet.create({
   buttonQuiet: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.lineStrong },
   buttonText: { ...type.body, fontWeight: "600", color: "#FFFFFF" },
   chipsWrap: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
-  chipsRow: { flexDirection: "row", gap: space.sm, paddingRight: space.lg },
+  chipsScroll: { flexGrow: 0, minHeight: 36 },
+  chipsRow: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingRight: space.lg },
   chip: {
     minHeight: 36,
     paddingHorizontal: 14,

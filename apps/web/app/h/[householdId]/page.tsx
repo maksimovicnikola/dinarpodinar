@@ -118,7 +118,7 @@ export default async function MonthPage({
     return (
       <Problem
         title="Domaćinstvo nije dostupno"
-        lead="Ova knjižica ne postoji ili niste njen član."
+        lead="Ovo domaćinstvo ne postoji ili niste njegov član."
       >
         Ako ste dobili pozivnicu, otvorite link iz e-pošte i prijavite se istom adresom.
       </Problem>
@@ -181,6 +181,9 @@ export default async function MonthPage({
           <h1>{household.data.name}</h1>
         </div>
         <div className="row">
+          <a className="button button--quiet" href={`/h/${householdId}/izvoz`}>
+            Izvezi u Excel
+          </a>
           {owner ? (
             <a className="button button--quiet" href={`/h/${householdId}/podesavanja`}>
               Podešavanja
@@ -239,19 +242,24 @@ export default async function MonthPage({
       <section className="card summary" aria-label="Zbir meseca">
         <div className="summary__top">
           <dl className="figure figure--lead">
-            <dt>Ostatak</dt>
-            <dd className={`amount${view.leftoverMinor < 0 ? " amount--short" : ""}`}>
+            <dt>Trenutno stanje</dt>
+            <dd
+              className={`amount${
+                view.leftoverMinor > 0 ? " amount--plus" : view.leftoverMinor < 0 ? " amount--short" : ""
+              }`}
+            >
+              {view.leftoverMinor > 0 ? "+" : ""}
               {view.leftover}
             </dd>
           </dl>
           <div className="figures">
             <dl className="figure">
               <dt>Prihod</dt>
-              <dd className="amount">{view.income}</dd>
+              <dd className="amount amount--plus">{view.income}</dd>
             </dl>
             <dl className="figure">
               <dt>Trošak</dt>
-              <dd className="amount">{view.expense}</dd>
+              <dd className="amount amount--short">{view.expense}</dd>
             </dl>
           </div>
         </div>

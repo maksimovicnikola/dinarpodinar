@@ -14,6 +14,7 @@ import { SymbolView } from "expo-symbols";
 import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 
+import { SignOutLink } from "../../components/sign-out";
 import { Amount, Button, Card, Chip, Chips, LimitBar, Muted, Notice, Screen, Tag, Title } from "../../components/ui";
 import { dayLabel, monthTitle, shiftMonth } from "../../lib/format";
 import { loadHousehold } from "../../lib/household";
@@ -27,7 +28,7 @@ type Overview = {
   householdName: string;
   people: Array<{ id: string; name: string }>;
   leftover: string;
-  leftoverNegative: boolean;
+  balanceTone: "plus" | "over" | "text";
   income: string;
   expense: string;
   sentence: string;
@@ -125,8 +126,8 @@ export default function OverviewScreen() {
     setView({
       householdName: household.name,
       people: household.people,
-      leftover: money(summary.leftoverMinor),
-      leftoverNegative: summary.leftoverMinor < 0,
+      leftover: `${summary.leftoverMinor > 0 ? "+" : ""}${money(summary.leftoverMinor)}`,
+      balanceTone: summary.leftoverMinor > 0 ? "plus" : summary.leftoverMinor < 0 ? "over" : "text",
       income: money(summary.incomeMinor),
       expense: money(summary.expenseMinor),
       sentence: (person
@@ -170,11 +171,14 @@ export default function OverviewScreen() {
       <View style={styles.header}>
         <View style={styles.topLine}>
           <Muted>{view?.householdName ?? "Dinar po dinar"}</Muted>
-          {view ? (
-            <Pressable accessibilityRole="button" onPress={() => router.push("/podesavanja")} hitSlop={8}>
-              <Text style={styles.settings}>Podešavanja</Text>
-            </Pressable>
-          ) : null}
+          <View style={styles.links}>
+            {view ? (
+              <Pressable accessibilityRole="button" onPress={() => router.push("/podesavanja")} hitSlop={8}>
+                <Text style={styles.settings}>Podešavanja</Text>
+              </Pressable>
+            ) : null}
+            <SignOutLink />
+          </View>
         </View>
         <View style={styles.stepper}>
           <StepButton label="Prethodni mesec" icon="chevron.left" disabled={!before} onPress={() => before && setMonth(before)} />
@@ -183,7 +187,7 @@ export default function OverviewScreen() {
         </View>
       </View>
 
-      {view && view.people.length > 1 ? (
+      {view && view.people.length > 0 ? (
         <Chips scroll>
           <Chip on={personId === ""} onPress={() => setPersonId("")}>Svi</Chip>
           {view.people.map((person) => (
@@ -207,18 +211,18 @@ export default function OverviewScreen() {
       {view ? (
         <>
           <Card>
-            <Muted>Ostatak</Muted>
-            <Amount size="display" tone={view.leftoverNegative ? "over" : "text"}>
+            <Muted>Trenutno stanje</Muted>
+            <Amount size="display" tone={view.balanceTone}>
               {view.leftover}
             </Amount>
             <View style={styles.figures}>
               <View style={styles.figure}>
                 <Muted>Prihod</Muted>
-                <Amount>{view.income}</Amount>
+                <Amount tone="plus">{view.income}</Amount>
               </View>
               <View style={styles.figure}>
                 <Muted>Trošak</Muted>
-                <Amount>{view.expense}</Amount>
+                <Amount tone="over">{view.expense}</Amount>
               </View>
             </View>
             <View style={styles.verdict}>
@@ -301,7 +305,8 @@ function StepButton({
 
 const styles = StyleSheet.create({
   header: { gap: space.xs, paddingTop: space.sm, paddingBottom: space.xs },
-  topLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  topLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md },
+  links: { flexDirection: "row", alignItems: "center", gap: space.md },
   settings: { ...type.small, fontWeight: "600", color: colors.accent },
   stepper: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   month: { ...type.title, color: colors.text },

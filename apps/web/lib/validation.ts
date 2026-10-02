@@ -28,7 +28,7 @@ export function validateEmail(raw: string): Checked {
   const value = normalizeEmail(raw);
 
   if (value.length === 0) {
-    return { ok: false, message: "Unesite adresu e-pošte na koju šaljemo link za prijavu." };
+    return { ok: false, message: "Unesite adresu e-pošte na koju šaljemo kod za prijavu." };
   }
 
   if (value.length > MAX_EMAIL_LENGTH) {
@@ -45,8 +45,8 @@ export function validateEmail(raw: string): Checked {
 export function validateDisplayName(raw: string): Checked {
   const value = raw.trim();
 
-  if (value.length === 0) {
-    return { ok: false, message: "Unesite ime da bi se znalo čiji su unosi u knjižici." };
+  if (value.length < 2) {
+    return { ok: false, message: "Ime mora imati bar dva znaka." };
   }
 
   if (value.length > MAX_NAME_LENGTH) {

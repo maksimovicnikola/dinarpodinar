@@ -125,16 +125,18 @@ export default function NewEntryScreen() {
       const web = process.env.EXPO_PUBLIC_WEB_URL;
       const token = session.data.session?.access_token;
       if (web && token) {
-        await fetch(`${web}/api/alerts`, {
+        const signal = typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(4000) : undefined;
+        void fetch(`${web}/api/alerts`, {
           method: "POST",
           headers: {
             "content-type": "application/json",
             authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ householdId: household.householdId }),
+          signal,
         }).catch(() => undefined);
       }
-      router.back();
+      router.dismissTo("/");
     } catch {
       setError("Unos nije sačuvan.");
     } finally {

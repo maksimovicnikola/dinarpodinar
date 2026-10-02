@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Share, StyleSheet, Switch, Text, View } from "react-native";
 
+import { SignOutButton } from "../components/sign-out";
 import {
   BackTitle,
   Button,
@@ -155,6 +156,10 @@ export default function SettingsScreen() {
       {household ? <Muted>{household.name}</Muted> : null}
       {problem ? <Notice>{problem}</Notice> : null}
       {notice ? <Notice tone={notice.tone}>{notice.text}</Notice> : null}
+
+      <Card>
+        <SignOutButton />
+      </Card>
 
       {household && !owner ? (
         <Card>

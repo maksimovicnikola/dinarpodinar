@@ -33,7 +33,7 @@ export default async function HomePage() {
       <Passbook>
         <PassbookHeader
           eyebrow="Zastoj"
-          title="Knjižica se ne otvara"
+          title="Domaćinstvo se ne otvara"
           lead="Nismo mogli da pročitamo vaša domaćinstva. Podaci su na mestu — samo nam veza nije odgovorila."
         />
         <div className="stack stack--loose">

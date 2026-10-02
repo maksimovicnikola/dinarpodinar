@@ -4,45 +4,67 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 
 import { Button, Card, Input, Label, Muted, Notice, Screen } from "../components/ui";
+import { checkedDisplayName, needsDisplayName } from "../lib/display-name";
 import { supabase } from "../lib/supabase";
 import { colors, space, type } from "../lib/theme";
 
+type Step = "email" | "code" | "name";
+
 export default function LoginScreen() {
   const router = useRouter();
-  const [name, setName] = useState("");
+  const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
-  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function onSubmit() {
-    setError(null);
-    setSentTo(null);
-    const displayName = name.trim();
-    const address = email.trim();
-    if (displayName.length < 2) {
-      setError("Ime mora imati bar dva znaka.");
+  function finishOrAskName(metadata: unknown) {
+    if (needsDisplayName(metadata)) {
+      setStep("name");
       return;
     }
+    router.replace("/");
+  }
+
+  async function saveName(value: string): Promise<boolean> {
+    const auth = await supabase.auth.getUser();
+    const userId = auth.data.user?.id;
+    if (!userId) {
+      setError("Prijava je istekla. Pošaljite novi kod.");
+      setStep("email");
+      return false;
+    }
+    const profile = await supabase.from("profiles").update({ display_name: value }).eq("id", userId);
+    if (profile.error) {
+      setError("Ime nije sačuvano. Pokušajte ponovo.");
+      return false;
+    }
+    const marked = await supabase.auth.updateUser({ data: { display_name: value } });
+    if (marked.error) {
+      setError("Ime nije sačuvano. Pokušajte ponovo.");
+      return false;
+    }
+    return true;
+  }
+
+  async function onSubmit() {
+    setError(null);
+    const address = email.trim();
     if (!address.includes("@")) {
       setError("E-pošta nije ispravna.");
       return;
     }
     setPending(true);
     try {
-      const result = await supabase.auth.signInWithOtp({
-        email: address,
-        options: {
-          data: { display_name: displayName },
-        },
-      });
+      const result = await supabase.auth.signInWithOtp({ email: address });
       if (result.error) {
         setError("Kod nije poslat. Proverite adresu i pokušajte ponovo.");
         return;
       }
+      setEmail(address);
       setCode("");
-      setSentTo(address);
+      setStep("code");
     } catch {
       setError("Kod nije poslat. Proverite vezu i pokušajte ponovo.");
     } finally {
@@ -51,7 +73,6 @@ export default function LoginScreen() {
   }
 
   async function onVerify() {
-    if (!sentTo) return;
     setError(null);
     const token = code.trim();
     if (!/^\d{6}$/.test(token)) {
@@ -60,14 +81,32 @@ export default function LoginScreen() {
     }
     setPending(true);
     try {
-      const result = await supabase.auth.verifyOtp({ email: sentTo, token, type: "email" });
+      const result = await supabase.auth.verifyOtp({ email, token, type: "email" });
       if (result.error || !result.data.session) {
         setError("Kod nije ispravan ili je istekao. Zatražite novi.");
         return;
       }
-      router.replace("/");
+      finishOrAskName(result.data.user?.user_metadata);
     } catch {
       setError("Prijava nije uspela. Proverite vezu i pokušajte ponovo.");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function onSaveName() {
+    setError(null);
+    const value = checkedDisplayName(name);
+    if (!value) {
+      setError("Ime mora imati bar dva znaka.");
+      return;
+    }
+    setPending(true);
+    try {
+      const saved = await saveName(value);
+      if (saved) router.replace("/");
+    } catch {
+      setError("Ime nije sačuvano. Proverite vezu i pokušajte ponovo.");
     } finally {
       setPending(false);
     }
@@ -92,11 +131,6 @@ export default function LoginScreen() {
           AppleAuthentication.AppleAuthenticationScope.EMAIL,
         ],
       });
-      const appleEmail = credential.email ?? email.trim();
-      if (!appleEmail.includes("@")) {
-        setError("Apple nije poslao e-poštu. Upišite je, pa pokušajte ponovo.");
-        return;
-      }
       if (!credential.identityToken) {
         setError("Apple nije vratio token za prijavu.");
         return;
@@ -109,7 +143,21 @@ export default function LoginScreen() {
         setError("Prijava preko Apple-a nije uspela.");
         return;
       }
-      router.replace("/");
+      const appleName = [credential.fullName?.givenName, credential.fullName?.familyName]
+        .filter((part) => part && part.trim().length > 0)
+        .join(" ")
+        .trim();
+      if (needsDisplayName(result.data.user?.user_metadata) && checkedDisplayName(appleName)) {
+        const saved = await saveName(appleName);
+        if (!saved) {
+          setName(appleName);
+          setStep("name");
+          return;
+        }
+        router.replace("/");
+        return;
+      }
+      finishOrAskName(result.data.user?.user_metadata);
     } catch {
       setError("Prijava preko Apple-a nije uspela.");
     } finally {
@@ -117,20 +165,24 @@ export default function LoginScreen() {
     }
   }
 
+  const heading = step === "code" ? "Upišite kod" : step === "name" ? "Vaše ime" : "Prijava";
+  const lead =
+    step === "code"
+      ? `Poslali smo šestocifreni kod na ${email}.`
+      : step === "name"
+        ? "Ovako vas vide ostali u domaćinstvu. Pitamo samo jednom, za nov nalog."
+        : "Bez lozinke. Upišite e-poštu, a mi šaljemo kod za prijavu.";
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
       <Screen>
         <View style={styles.hero}>
           <Text style={styles.brand}>Dinar po dinar</Text>
-          <Text style={styles.heading}>{sentTo ? "Upišite kod" : "Prijava"}</Text>
-          <Muted style={styles.lead}>
-            {sentTo
-              ? `Poslali smo šestocifreni kod na ${sentTo}.`
-              : "Bez lozinke. Upišite ime i e-poštu, a mi šaljemo kod za prijavu."}
-          </Muted>
+          <Text style={styles.heading}>{heading}</Text>
+          <Muted style={styles.lead}>{lead}</Muted>
         </View>
 
-        {sentTo ? (
+        {step === "code" ? (
           <Card>
             <Input
               value={code}
@@ -151,12 +203,10 @@ export default function LoginScreen() {
               Pošalji novi kod
             </Button>
           </Card>
-        ) : (
+        ) : null}
+
+        {step === "email" ? (
           <Card>
-            <View style={styles.field}>
-              <Label>Ime</Label>
-              <Input value={name} onChangeText={setName} placeholder="Kako da vas zovemo" autoCapitalize="words" textContentType="givenName" />
-            </View>
             <View style={styles.field}>
               <Label>E-pošta</Label>
               <Input
@@ -174,13 +224,33 @@ export default function LoginScreen() {
               {pending ? "Šaljem…" : "Pošalji kod"}
             </Button>
           </Card>
-        )}
+        ) : null}
 
-        {sentTo ? null : (
+        {step === "name" ? (
+          <Card>
+            <View style={styles.field}>
+              <Label>Ime</Label>
+              <Input
+                value={name}
+                onChangeText={setName}
+                placeholder="Kako da vas zovemo"
+                autoCapitalize="words"
+                textContentType="givenName"
+                autoFocus
+              />
+            </View>
+            {error ? <Notice>{error}</Notice> : null}
+            <Button onPress={() => void onSaveName()} disabled={pending}>
+              {pending ? "Čuvam…" : "Sačuvaj ime"}
+            </Button>
+          </Card>
+        ) : null}
+
+        {step === "email" ? (
           <Button quiet onPress={() => void onApple()} disabled={pending}>
             Nastavi sa Apple-om
           </Button>
-        )}
+        ) : null}
       </Screen>
     </KeyboardAvoidingView>
   );

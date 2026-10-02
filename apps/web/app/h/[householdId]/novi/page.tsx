@@ -80,7 +80,7 @@ export default async function NewEntryPage({
   // Nečlan ne dobija ni potvrdu da domaćinstvo postoji.
   if (!household.data || role === "") {
     return (
-      <Problem title="Domaćinstvo nije dostupno" lead="Ova knjižica ne postoji ili niste njen član.">
+      <Problem title="Domaćinstvo nije dostupno" lead="Ovo domaćinstvo ne postoji ili niste njegov član.">
         Ako ste dobili pozivnicu, otvorite link iz e-pošte i prijavite se istom adresom.
       </Problem>
     );

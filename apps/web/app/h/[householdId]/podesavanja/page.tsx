@@ -103,7 +103,7 @@ export default async function SettingsPage({
   // Nečlan ne dobija ni potvrdu da domaćinstvo postoji.
   if (!household.data || role === "") {
     return (
-      <Problem title="Domaćinstvo nije dostupno" lead="Ova knjižica ne postoji ili niste njen član.">
+      <Problem title="Domaćinstvo nije dostupno" lead="Ovo domaćinstvo ne postoji ili niste njegov član.">
         Ako ste dobili pozivnicu, otvorite link iz e-pošte i prijavite se istom adresom.
       </Problem>
     );
@@ -192,7 +192,7 @@ export default async function SettingsPage({
   const ruleRows = rules.data ?? [];
 
   return (
-    <>
+    <div className="settings">
       <Passbook>
         <PassbookHeader
           eyebrow="Podešavanja"
@@ -206,6 +206,7 @@ export default async function SettingsPage({
         </div>
       </Passbook>
 
+      <div className="settings__main">
       <Passbook>
         <h2>Kategorije</h2>
         <p className="fine">
@@ -295,7 +296,9 @@ export default async function SettingsPage({
           </div>
         </div>
       </Passbook>
+      </div>
 
+      <div className="settings__side">
       <Passbook>
         <h2>Članovi</h2>
         <p className="fine">Vlasnik ostaje u domaćinstvu; uklanjaju se samo članovi.</p>
@@ -418,6 +421,7 @@ export default async function SettingsPage({
           </ul>
         )}
       </Passbook>
-    </>
+      </div>
+    </div>
   );
 }

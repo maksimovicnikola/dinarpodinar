@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 
+import { SignOutLink } from "../../components/sign-out";
 import { Button, Card, Chip, Chips, Label, Muted, Notice, Screen, Tag } from "../../components/ui";
 import { dayLabel, monthTitle } from "../../lib/format";
 import { loadHousehold, type Household } from "../../lib/household";
@@ -75,7 +76,7 @@ export default function EntriesScreen() {
   const usedCategories = [...new Set(rows.map((row) => row.category_id))]
     .map((id) => ({ id, name: categoryName.get(id) ?? "Kategorija" }))
     .sort((a, b) => a.name.localeCompare(b.name, "sr"));
-  const people = [...new Map(rows.map((row) => [row.person_id, row.person_name])).entries()];
+  const people = household?.people ?? [];
   const months = [...new Set(rows.map((row) => monthKey(row.occurred_on)))];
   const shown = rows.filter(
     (row) =>
@@ -95,6 +96,7 @@ export default function EntriesScreen() {
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}>
       <View style={styles.header}>
         <Text style={styles.heading}>Unosi</Text>
+        <SignOutLink />
       </View>
       {message ? <Notice>{message}</Notice> : null}
       {empty ? (
@@ -115,14 +117,14 @@ export default function EntriesScreen() {
             </Chip>
           ))}
         </Chips>
-        {people.length > 1 ? (
+        {people.length > 0 ? (
           <>
             <Label>Osoba</Label>
             <Chips scroll>
               <Chip on={personId === ""} onPress={() => setPersonId("")}>Svi</Chip>
-              {people.map(([id, name]) => (
-                <Chip key={id} on={personId === id} onPress={() => setPersonId(id)}>
-                  {name}
+              {people.map((person) => (
+                <Chip key={person.id} on={personId === person.id} onPress={() => setPersonId(person.id)}>
+                  {person.name}
                 </Chip>
               ))}
             </Chips>
@@ -177,7 +179,13 @@ export default function EntriesScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: space.sm },
+  header: {
+    paddingTop: space.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.md,
+  },
   heading: { ...type.display, fontSize: 28, lineHeight: 34, color: colors.text },
   filters: { gap: space.sm },
   dayHead: { paddingHorizontal: space.xs, marginTop: space.sm },

@@ -48,7 +48,7 @@ export function otpErrorMessage(raw: string | null | undefined): string {
     return "Nema veze sa serverom. Proverite internet i pokušajte ponovo.";
   }
 
-  return "Link nije poslat. Proverite adresu e-pošte i pokušajte ponovo.";
+  return "Kod nije poslat. Proverite adresu e-pošte i pokušajte ponovo.";
 }
 
 export type InvitationErrorCode =

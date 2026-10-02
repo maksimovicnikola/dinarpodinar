@@ -1,14 +1,13 @@
 import { monthKey, todayInBelgrade } from "@finance/domain";
 import { redirect } from "next/navigation";
 
-import { Notice } from "@/components/form";
-import { Passbook, PassbookHeader, Ruler } from "@/components/passbook";
 import { Problem } from "@/components/problem";
 import {
   buildEntryList,
   buildMonthNav,
   buildMonthView,
   buildUpcoming,
+  groupEntriesByDay,
 } from "@/lib/month-view";
 import { buildPeople, monthParam, selectPerson } from "@/lib/month-query";
 import { loginPathWithNext, uuidParam } from "@/lib/next-path";
@@ -169,205 +168,255 @@ export default async function MonthPage({
   const owner = canManage(role);
   const href = (nextMonth: string, personId?: string) =>
     `/h/${householdId}?month=${nextMonth}${personId ? `&person=${personId}` : ""}`;
-  const scope = person ? person.name : "celo domaćinstvo";
+  const days = groupEntriesByDay(ledger);
+  const scope = person ? person.name : "Celo domaćinstvo";
 
   return (
     <>
       <LiveEntries householdId={householdId} />
 
-      <Passbook>
-        <PassbookHeader
-          eyebrow="Mesečni pregled"
-          title={household.data.name}
-          lead={`${nav.current.label} — ${scope}`}
-        />
-
-        <div className="stack stack--loose">
-          <nav className="switch" aria-label="Izbor meseca">
-            {nav.previous ? (
-              <a className="switch__item" href={href(nav.previous.month, person?.id)} rel="prev">
-                {nav.previous.label}
-              </a>
-            ) : null}
-            <span className="switch__item switch__item--on" aria-current="page">
-              {nav.current.label}
-            </span>
-            {nav.next ? (
-              <a className="switch__item" href={href(nav.next.month, person?.id)} rel="next">
-                {nav.next.label}
-              </a>
-            ) : null}
-          </nav>
-
-          <nav className="switch" aria-label="Filter po osobi">
-            <a
-              className={`switch__item${person ? "" : " switch__item--on"}`}
-              href={href(month)}
-              aria-current={person ? undefined : "page"}
-            >
-              Svi
-            </a>
-            {people.map((candidate) => (
-              <a
-                key={candidate.id}
-                className={`switch__item${person?.id === candidate.id ? " switch__item--on" : ""}`}
-                href={href(month, candidate.id)}
-                aria-current={person?.id === candidate.id ? "page" : undefined}
-              >
-                {candidate.name}
-              </a>
-            ))}
-          </nav>
-
-          <dl className="totals">
-            <div className="totals__cell">
-              <dt>Prihod</dt>
-              <dd className="amount">{view.income}</dd>
-            </div>
-            <div className="totals__cell">
-              <dt>Trošak</dt>
-              <dd className="amount">{view.expense}</dd>
-            </div>
-            <div className="totals__cell totals__cell--sum">
-              <dt>Ostatak</dt>
-              <dd className={`amount${view.leftoverMinor < 0 ? " amount--short" : ""}`}>
-                {view.leftover}
-              </dd>
-            </div>
-          </dl>
-
-          <Ruler />
-
-          <p className="verdict">{view.sentence}</p>
-
-          {view.alertRows.length > 0 ? (
-            <ul className="alerts stack stack--tight" aria-label="Pragovi limita">
-              {view.alertRows.map((alert) => (
-                <li key={`${alert.categoryId}:${alert.threshold}`}>
-                  <Notice tone="bad">
-                    {alert.message}
-                    {alert.archived ? <span className="tag tag--quiet">arhivirana</span> : null}
-                  </Notice>
-                </li>
-              ))}
-            </ul>
-          ) : null}
+      <header className="pagehead">
+        <div className="pagehead__title">
+          <p className="eyebrow">{scope}</p>
+          <h1>{household.data.name}</h1>
         </div>
-      </Passbook>
-
-      <Passbook>
-        <h2>Kategorije naspram limita</h2>
-        <p className="fine">
-          {person
-            ? `Trake prikazuju samo unose osobe ${person.name}. Limit važi za celu kategoriju domaćinstva.`
-            : "Limit važi za celu kategoriju troška, ne po osobi."}
-        </p>
-
-        {view.bars.length === 0 ? (
-          <p className="fine">Nema troškova u ovom mesecu.</p>
-        ) : (
-          <ul className="bars">
-            {view.bars.map((bar) => (
-              <li className="bar" key={bar.categoryId}>
-                <span className="bar__name">
-                  {bar.name}
-                  {bar.archived ? <span className="tag tag--quiet">arhivirana</span> : null}
-                  {bar.limited ? null : <span className="tag tag--quiet">bez limita</span>}
-                </span>
-                <span className="bar__amount amount">{bar.label}</span>
-                <span
-                  className={`bar__track${bar.over ? " bar__track--over" : ""}${bar.limited ? "" : " bar__track--free"}`}
-                  aria-hidden="true"
-                >
-                  <span className="bar__fill" style={{ inlineSize: `${bar.width}%` }} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Passbook>
-
-      <Passbook>
-        <h2>Dospeća i podsetnici</h2>
-        <p className="fine">Mesečna ponavljanja koja dospevaju u {nav.current.label}</p>
-
-        {upcoming.length === 0 ? (
-          <p className="fine">Nema aktivnih ponavljanja za ovaj mesec.</p>
-        ) : (
-          <ul className="ledger">
-            {upcoming.map((row) => (
-              <li className="ledger__row" key={row.id}>
-                <span className="ledger__date amount">{row.dueDate}</span>
-                <span className="ledger__body">
-                  <span className="ledger__title">
-                    {row.categoryName}
-                    <span className={`tag tag--${row.state === "uneto" ? "good" : "quiet"}`}>
-                      {row.label}
-                    </span>
-                  </span>
-                  <span className="fine">
-                    {row.kindLabel} · {row.personName} · podsetnik {row.remindDate}
-                  </span>
-                </span>
-                <span className="ledger__amount amount">{row.amount}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Passbook>
-
-      <Passbook>
-        <h2>Unosi</h2>
-        <p className="fine">
-          {person
-            ? `Unosi osobe ${person.name} u ${nav.current.label}`
-            : `Svi unosi u ${nav.current.label}`}
-        </p>
-
-        {ledger.length === 0 ? (
-          <p className="fine">Ovaj mesec još nema unosa.</p>
-        ) : (
-          <ul className="ledger">
-            {ledger.map((row) => (
-              <li className="ledger__row" key={row.id}>
-                <span className="ledger__date amount">{row.date}</span>
-                <span className="ledger__body">
-                  <span className="ledger__title">
-                    {row.categoryName}
-                    {row.categoryArchived ? <span className="tag tag--quiet">arhivirana</span> : null}
-                    {row.automatic ? <span className="tag tag--quiet">ponavljanje</span> : null}
-                  </span>
-                  <span className="fine">
-                    {row.kindLabel} · {row.personName}
-                    {row.note ? ` · ${row.note}` : ""}
-                  </span>
-                </span>
-                <span
-                  className={`ledger__amount amount${row.kind === "income" ? " amount--in" : ""}`}
-                >
-                  {row.amount}
-                </span>
-                {owner ? (
-                  <a className="ledger__edit" href={`/h/${householdId}/unos/${row.id}`}>
-                    Izmeni<span className="sr-only"> unos od {row.date}, {row.amount}</span>
-                  </a>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <Ruler />
-
         <div className="row">
+          {owner ? (
+            <a className="button button--quiet" href={`/h/${householdId}/podesavanja`}>
+              Podešavanja
+            </a>
+          ) : null}
           <a className="button" href={`/h/${householdId}/novi`}>
             Novi unos
           </a>
-          <a className="button button--quiet" href={`/h/${householdId}/podesavanja`}>
-            Podešavanja
-          </a>
         </div>
-      </Passbook>
+      </header>
+
+      <div className="filters">
+        <nav className="stepper" aria-label="Izbor meseca">
+          {nav.previous ? (
+            <a className="stepper__go" href={href(nav.previous.month, person?.id)} rel="prev">
+              <span aria-hidden="true">‹</span>
+              <span className="sr-only">{nav.previous.label}</span>
+            </a>
+          ) : (
+            <span className="stepper__go" aria-disabled="true" />
+          )}
+          <span className="stepper__label" aria-current="page">
+            {displayMonth(nav.current.label)}
+          </span>
+          {nav.next ? (
+            <a className="stepper__go" href={href(nav.next.month, person?.id)} rel="next">
+              <span aria-hidden="true">›</span>
+              <span className="sr-only">{nav.next.label}</span>
+            </a>
+          ) : (
+            <span className="stepper__go" aria-disabled="true" />
+          )}
+        </nav>
+
+        <nav className="switch" aria-label="Filter po osobi">
+          <a
+            className={`switch__item${person ? "" : " switch__item--on"}`}
+            href={href(month)}
+            aria-current={person ? undefined : "page"}
+          >
+            Svi
+          </a>
+          {people.map((candidate) => (
+            <a
+              key={candidate.id}
+              className={`switch__item${person?.id === candidate.id ? " switch__item--on" : ""}`}
+              href={href(month, candidate.id)}
+              aria-current={person?.id === candidate.id ? "page" : undefined}
+            >
+              {candidate.name}
+            </a>
+          ))}
+        </nav>
+      </div>
+
+      <section className="card summary" aria-label="Zbir meseca">
+        <div className="summary__top">
+          <dl className="figure figure--lead">
+            <dt>Ostatak</dt>
+            <dd className={`amount${view.leftoverMinor < 0 ? " amount--short" : ""}`}>
+              {view.leftover}
+            </dd>
+          </dl>
+          <div className="figures">
+            <dl className="figure">
+              <dt>Prihod</dt>
+              <dd className="amount">{view.income}</dd>
+            </dl>
+            <dl className="figure">
+              <dt>Trošak</dt>
+              <dd className="amount">{view.expense}</dd>
+            </dl>
+          </div>
+        </div>
+        <p className="verdict">{view.sentence}</p>
+        {view.alertRows.length > 0 ? (
+          <ul className="alerts" aria-label="Pragovi limita">
+            {view.alertRows.map((alert) => (
+              <li
+                key={`${alert.categoryId}:${alert.threshold}`}
+                className={`tag tag--${alert.threshold === 100 ? "over" : "near"}`}
+              >
+                {alert.message}
+                {alert.archived ? " (arhivirana)" : ""}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
+
+      <div className="columns">
+        <div className="columns__side">
+          <section className="card" aria-labelledby="kategorije">
+            <div className="card__head">
+              <h2 id="kategorije">Kategorije</h2>
+              {person ? <p className="fine">Limit važi za celo domaćinstvo</p> : null}
+            </div>
+
+            {view.bars.length === 0 ? (
+              <p className="empty">Nema troškova u ovom mesecu.</p>
+            ) : (
+              <ul className="bars">
+                {view.bars.map((bar) => (
+                  <li className="bar" key={bar.categoryId}>
+                    <span className="bar__name">
+                      {bar.name}
+                      {bar.archived ? <span className="tag">arhivirana</span> : null}
+                      {bar.state === "near" || bar.state === "over" ? (
+                        <span className={`tag tag--${bar.state}`}>{bar.percent}%</span>
+                      ) : null}
+                    </span>
+                    <span className="bar__amount amount">
+                      <BarAmount label={bar.label} />
+                    </span>
+                    <span className="meter" data-state={bar.state} aria-hidden="true">
+                      <span className="meter__fill" style={{ inlineSize: `${bar.width}%` }} />
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="card" aria-labelledby="dospeca">
+            <div className="card__head">
+              <h2 id="dospeca">Uskoro dospeva</h2>
+            </div>
+
+            {upcoming.length === 0 ? (
+              <p className="empty">Nema mesečnih ponavljanja.</p>
+            ) : (
+              <ul className="ledger">
+                {upcoming.map((row) => (
+                  <li className="ledger__row" key={row.id}>
+                    <span className="ledger__date amount">{row.dueDate}</span>
+                    <span className="ledger__body">
+                      <span className="ledger__title">
+                        {row.categoryName}
+                        <span className={`tag${row.state === "uneto" ? " tag--good" : ""}`}>
+                          {row.label}
+                        </span>
+                      </span>
+                      <span className="fine">
+                        {row.personName} · podsetnik {row.remindDate}
+                      </span>
+                    </span>
+                    <span className="ledger__amount amount">{row.amount}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+
+        <section className="card" aria-labelledby="unosi">
+          <div className="card__head">
+            <h2 id="unosi">Unosi</h2>
+            <p className="fine">{ledger.length === 0 ? "" : `${ledger.length} u mesecu`}</p>
+          </div>
+
+          {days.length === 0 ? (
+            <div className="empty stack">
+              <p>Ovaj mesec još nema unosa.</p>
+              <p>
+                <a className="button" href={`/h/${householdId}/novi`}>
+                  Dodaj prvi unos
+                </a>
+              </p>
+            </div>
+          ) : (
+            <div className="days">
+              {days.map((day) => (
+                <section key={day.occurredOn} aria-label={day.date}>
+                  <h3 className="day__head">
+                    <span>{day.date}</span>
+                  </h3>
+                  <ul className="entries">
+                    {day.rows.map((row) => {
+                      const body = (
+                        <>
+                          <span className="entry__body">
+                            <span className="entry__title">
+                              {row.categoryName}
+                              {row.categoryArchived ? <span className="tag">arhivirana</span> : null}
+                              {row.automatic ? <span className="tag">ponavljanje</span> : null}
+                            </span>
+                            <span className="entry__meta">
+                              {row.personName}
+                              {row.note ? ` · ${row.note}` : ""}
+                            </span>
+                          </span>
+                          <span className="entry__amount amount">
+                            {row.kind === "income" ? "+" : "−"}
+                            {row.amount}
+                          </span>
+                        </>
+                      );
+                      return (
+                        <li key={row.id}>
+                          {owner ? (
+                            <a className="entry" href={`/h/${householdId}/unos/${row.id}`}>
+                              {body}
+                              <span className="sr-only">
+                                Izmeni unos od {row.date}, {row.amount}
+                              </span>
+                            </a>
+                          ) : (
+                            <div className="entry">{body}</div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </>
+  );
+}
+
+/** „septembar 2026.“ → „Septembar 2026“ */
+function displayMonth(label: string): string {
+  const trimmed = label.replace(/\.$/, "");
+  return trimmed.charAt(0).toLocaleUpperCase("sr") + trimmed.slice(1);
+}
+
+/** „34.400 RSD / 40.000 RSD“: potrošeno je istaknuto, limit je prateći. */
+function BarAmount({ label }: { label: string }) {
+  const [spent, limit] = label.split(" / ");
+  return (
+    <>
+      <strong>{spent}</strong>
+      {limit ? ` / ${limit}` : null}
     </>
   );
 }

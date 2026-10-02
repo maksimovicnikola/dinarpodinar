@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-/** Potpisni motiv: linijar tekućeg salda. Jedini ukras u aplikaciji. */
 export function Ruler() {
   return <hr className="ruler" aria-hidden="true" />;
 }
@@ -23,7 +22,6 @@ export function PassbookHeader({
       <p className="eyebrow">{eyebrow}</p>
       <h1>{title}</h1>
       {lead ? <p className="lead">{lead}</p> : null}
-      <Ruler />
     </header>
   );
 }

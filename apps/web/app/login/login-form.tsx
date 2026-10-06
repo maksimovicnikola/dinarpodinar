@@ -38,7 +38,10 @@ export function LoginForm({
     setPending(true);
     try {
       const supabase = createBrowserSupabase();
-      const result = await supabase.auth.signInWithOtp({ email: checkedEmail.value });
+      const result = await supabase.auth.signInWithOtp({
+        email: checkedEmail.value,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      });
       if (result.error) {
         setError(otpErrorMessage(result.error.message));
         return;

@@ -54,9 +54,30 @@ export default async function HomePage() {
     );
   }
 
-  if (!membership.data) {
-    redirect("/novo");
+  if (membership.data) {
+    redirect(`/h/${membership.data.household_id}`);
   }
 
-  redirect(`/h/${membership.data.household_id}`);
+  const email = auth.data.user.email?.trim().toLowerCase();
+  if (email) {
+    const invite = await supabase
+      .from("invitations")
+      .select("token")
+      .eq("email", email)
+      .is("used_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .order("expires_at", { ascending: true })
+      .limit(1);
+
+    if (invite.error) {
+      console.error("pending invitation lookup failed", invite.error);
+    }
+
+    const pendingToken = invite.data?.[0]?.token;
+    if (pendingToken) {
+      redirect(`/poziv/${pendingToken}`);
+    }
+  }
+
+  redirect("/novo");
 }

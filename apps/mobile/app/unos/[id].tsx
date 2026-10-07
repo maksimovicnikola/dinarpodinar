@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 
+import { CategoryPicker } from "../../components/category-picker";
 import { BackTitle, Button, Card, Chip, Chips, Input, Label, Muted, Notice, Screen } from "../../components/ui";
 import { dayLabel } from "../../lib/format";
 import { loadHousehold, type Household } from "../../lib/household";
@@ -87,7 +88,7 @@ export default function EditEntryScreen() {
 
   const categories = (household?.categories ?? []).filter(
     (category) => category.kind === entry?.kind && (!category.archived || category.id === entry.categoryId),
-  );
+  ).sort((a, b) => a.name.localeCompare(b.name, "sr"));
   const people = household?.people ?? [];
   const former = entry && !people.some((person) => person.id === entry.personId);
 
@@ -164,13 +165,11 @@ export default function EditEntryScreen() {
             <Label>Iznos</Label>
             <Input value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
             <Label>Kategorija</Label>
-            <Chips>
-              {categories.map((category) => (
-                <Chip key={category.id} on={categoryId === category.id} onPress={() => setCategoryId(category.id)}>
-                  {category.archived ? `${category.name} (arhivirana)` : category.name}
-                </Chip>
-              ))}
-            </Chips>
+            <CategoryPicker
+              categories={categories}
+              selectedId={categoryId}
+              onSelect={setCategoryId}
+            />
             <Label>Ko</Label>
             <Chips>
               {former ? (

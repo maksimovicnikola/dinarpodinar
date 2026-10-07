@@ -2,28 +2,35 @@
 
 import { useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
 
-type CategoryOption = { id: string; name: string };
+type CategoryOption = { id: string; name: string; label?: string };
 
 export function CategoryCombobox({
   categories,
   value,
   onChange,
   hintId,
+  inputId = "kategorija",
+  fieldName = "kategorija",
 }: {
   categories: CategoryOption[];
   value: string;
   onChange: (id: string) => void;
   hintId: string;
+  inputId?: string;
+  fieldName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const selected = categories.find((category) => category.id === value);
+  const listId = `${inputId}-opcije`;
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("sr");
     return normalizedQuery
-      ? categories.filter((category) => category.name.toLocaleLowerCase("sr").includes(normalizedQuery))
+      ? categories.filter((category) =>
+          (category.label ?? category.name).toLocaleLowerCase("sr").includes(normalizedQuery),
+        )
       : categories;
   }, [categories, query]);
 
@@ -52,17 +59,17 @@ export function CategoryCombobox({
     <div className="category-combobox" ref={rootRef} onBlur={closeIfFocusLeaves}>
       <input
         ref={inputRef}
-        id="kategorija"
+        id={inputId}
         className="input category-combobox__input"
         type="text"
         role="combobox"
         aria-autocomplete="list"
         aria-expanded={open}
-        aria-controls="kategorija-opcije"
+        aria-controls={listId}
         aria-describedby={hintId}
         autoComplete="off"
-        placeholder={categories.length === 0 ? "Nema aktivnih kategorija" : "Izaberite ili pretražite"}
-        value={open ? query : selected?.name ?? ""}
+        placeholder={categories.length === 0 ? "Nema dostupnih kategorija" : "Izaberite ili pretražite"}
+        value={open ? query : selected?.label ?? selected?.name ?? ""}
         disabled={categories.length === 0}
         onFocus={() => {
           if (!open) {
@@ -83,11 +90,11 @@ export function CategoryCombobox({
           }
         }}
       />
-      <input type="hidden" name="kategorija" value={value} />
+      <input type="hidden" name={fieldName} value={value} />
       {open && categories.length > 0 ? (
         <ul
           className="category-combobox__options"
-          id="kategorija-opcije"
+          id={listId}
           role="listbox"
           aria-label="Kategorije"
         >
@@ -117,7 +124,7 @@ export function CategoryCombobox({
                     }
                   }}
                 >
-                  {category.name}
+                  {category.label ?? category.name}
                 </button>
               </li>
             ))

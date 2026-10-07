@@ -531,6 +531,8 @@ describe("strana unosa", () => {
     expect(page.markup).toContain('value="1250,50"');
     expect(page.markup).toContain(`value="${dayIn(MONTH_ONE, 12)}"`);
     expect(page.markup).toContain(`value="strana-${runStamp}"`);
+    expect(page.markup).toContain('role="combobox"');
+    expect(page.markup).toContain('placeholder="Izaberite ili pretražite"');
     expect(page.markup).toContain(">Sačuvaj izmenu</button>");
     expect(page.markup).toContain(">Obriši unos</button>");
     expect(page.markup).toContain("Razumem da se unos briše zauvek");
@@ -546,10 +548,11 @@ describe("strana unosa", () => {
   it("nudi aktivne kategorije troška, i nijednu kategoriju prihoda", async () => {
     const page = await get(`/h/${domA}/unos/${entry}`, ana.cookie);
 
-    expect(page.markup).toContain(">Hrana</option>");
-    expect(page.markup).toContain(">Računi</option>");
+    expect(page.markup).toContain('role="combobox"');
+    expect(page.markup).toContain("Hrana");
+    expect(page.markup).toContain("Računi");
     // „Plata“ je prihod: ni u markup-u, ni u RSC teretu strane.
-    expect(page.body).not.toContain(">Plata</option>");
+    expect(page.body).not.toContain("Plata");
   });
 
   it("član vidi samo ko menja unos i na koga je zapisan", async () => {

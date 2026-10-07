@@ -16,6 +16,7 @@
 
 import { useActionState, useState } from "react";
 
+import { CategoryCombobox } from "@/components/category-combobox";
 import { Field, Notice } from "@/components/form";
 import { Ruler } from "@/components/passbook";
 import { SubmitButton } from "@/components/submit-button";
@@ -100,21 +101,16 @@ export function EditEntryForm({
         label="Kategorija"
         hint="Vrsta unosa se ne menja, pa su u ponudi samo kategorije te vrste."
       >
-        <select
-          id="kategorija"
-          className="input"
-          name="kategorija"
+        <CategoryCombobox
+          categories={categories.map((category) => ({
+            id: category.id,
+            name: category.name,
+            label: category.archived ? `${category.name} (arhivirana)` : category.name,
+          }))}
           value={categoryId}
-          onChange={(event) => setCategoryId(event.target.value)}
-          disabled={categories.length === 0}
-          aria-describedby="kategorija-hint"
-        >
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.archived ? `${category.name} (arhivirana)` : category.name}
-            </option>
-          ))}
-        </select>
+          onChange={setCategoryId}
+          hintId="kategorija-hint"
+        />
       </Field>
 
       <Field

@@ -15,6 +15,7 @@ import { firstParam } from "./next-path";
 export const FALLBACK_PERSON_NAME = "Član";
 
 export type Person = { id: string; name: string };
+export type CategoryFilter = { id: string; name: string };
 
 /**
  * Tačno četiri cifre godine i mesec 01..12. Bez ovoga `"2026-13"` prođe do
@@ -187,4 +188,21 @@ export function selectPerson(
   }
 
   return { id: match.id, name: match.name.trim() || FALLBACK_PERSON_NAME };
+}
+
+/**
+ * Izabrana kategorija, samo ako pripada domaćinstvu. Nepoznat identifikator
+ * ne postaje naslov niti utiče na prikazane unose.
+ */
+export function selectCategory(
+  raw: string | string[] | undefined,
+  categories: readonly CategoryFilter[],
+): CategoryFilter | null {
+  const id = firstParam(raw)?.trim();
+  if (!id) {
+    return null;
+  }
+
+  const match = categories.find((category) => category.id === id);
+  return match ? { id: match.id, name: match.name } : null;
 }

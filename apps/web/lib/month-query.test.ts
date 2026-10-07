@@ -10,6 +10,7 @@ import {
   monthsAhead,
   nextMonthKey,
   previousMonthKey,
+  selectCategory,
   selectPerson,
 } from "./month-query";
 
@@ -297,6 +298,23 @@ describe("selectPerson", () => {
 
   it("bira stvarnog člana domaćinstva", () => {
     expect(selectPerson("m", people)).toEqual({ id: "m", name: "Marko" });
+  });
+
+  describe("selectCategory", () => {
+    const categories = [
+      { id: "food", name: "Hrana" },
+      { id: "medicine", name: "Apoteka" },
+    ];
+
+    it("bira kategoriju iz domaćinstva", () => {
+      expect(selectCategory("medicine", categories)).toEqual({ id: "medicine", name: "Apoteka" });
+    });
+
+    it("uzima prvi parametar i ignoriše nepoznatu kategoriju", () => {
+      expect(selectCategory(["food", "medicine"], categories)).toEqual({ id: "food", name: "Hrana" });
+      expect(selectCategory("nepoznata", categories)).toBeNull();
+      expect(selectCategory(undefined, categories)).toBeNull();
+    });
   });
 
   it("nepoznata osoba pada na sve, bez odjeka identifikatora", () => {

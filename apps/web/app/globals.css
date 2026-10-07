@@ -864,6 +864,23 @@ textarea.input {
   min-width: 0;
 }
 
+.bar__category-link {
+  color: inherit;
+  text-decoration: none;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.bar__category-link:hover,
+.bar__category-link[aria-current="page"] {
+  color: var(--accent-strong);
+  text-decoration: underline;
+}
+
+.category-filter {
+  margin-top: -0.75rem;
+}
+
 .bar__amount {
   font-size: 0.875rem;
   color: var(--muted);

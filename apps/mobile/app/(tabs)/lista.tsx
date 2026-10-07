@@ -1,6 +1,6 @@
 import { formatMoney, monthKey } from "@finance/domain";
-import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 
 import { SignOutLink } from "../../components/sign-out";
@@ -24,6 +24,10 @@ type Row = {
 
 export default function EntriesScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ category?: string; month?: string; person?: string }>();
+  const routeCategory = Array.isArray(params.category) ? params.category[0] ?? "" : params.category ?? "";
+  const routeMonth = Array.isArray(params.month) ? params.month[0] ?? "" : params.month ?? "";
+  const routePerson = Array.isArray(params.person) ? params.person[0] ?? "" : params.person ?? "";
   const [household, setHousehold] = useState<Household | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [personId, setPersonId] = useState("");
@@ -32,6 +36,12 @@ export default function EntriesScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [empty, setEmpty] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    setCategoryId(routeCategory);
+    setMonth(routeMonth);
+    setPersonId(routePerson);
+  }, [routeCategory, routeMonth, routePerson]);
 
   const load = useCallback(async () => {
     const result = await loadHousehold();
@@ -72,7 +82,23 @@ export default function EntriesScreen() {
     setRefreshing(false);
   }
 
+  function setCategoryFilter(id: string) {
+    setCategoryId(id);
+    router.setParams({ category: id || undefined });
+  }
+
+  function setMonthFilter(value: string) {
+    setMonth(value);
+    router.setParams({ month: value || undefined });
+  }
+
+  function setPersonFilter(id: string) {
+    setPersonId(id);
+    router.setParams({ person: id || undefined });
+  }
+
   const categoryName = new Map(household?.categories.map((category) => [category.id, category.name]) ?? []);
+  const selectedCategory = household?.categories.find((category) => category.id === categoryId);
   const usedCategories = [...new Set(rows.map((row) => row.category_id))]
     .map((id) => ({ id, name: categoryName.get(id) ?? "Kategorija" }))
     .sort((a, b) => a.name.localeCompare(b.name, "sr"));
@@ -95,9 +121,21 @@ export default function EntriesScreen() {
   return (
     <Screen refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}>
       <View style={styles.header}>
-        <Text style={styles.heading}>Unosi</Text>
+        <Text style={styles.heading}>
+          {selectedCategory ? `Unosi kategorije „${selectedCategory.name}“` : "Unosi"}
+        </Text>
         <SignOutLink />
       </View>
+      {selectedCategory ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setCategoryFilter("")}
+          hitSlop={8}
+          style={styles.clearCategory}
+        >
+          <Text style={styles.clearCategoryText}>Ukloni filter kategorije</Text>
+        </Pressable>
+      ) : null}
       {message ? <Notice>{message}</Notice> : null}
       {empty ? (
         <Card>
@@ -110,9 +148,9 @@ export default function EntriesScreen() {
       <View style={styles.filters}>
         <Label>Mesec</Label>
         <Chips scroll>
-          <Chip on={month === ""} onPress={() => setMonth("")}>Svi</Chip>
+          <Chip on={month === ""} onPress={() => setMonthFilter("")}>Svi</Chip>
           {months.map((key) => (
-            <Chip key={key} on={month === key} onPress={() => setMonth(key)}>
+            <Chip key={key} on={month === key} onPress={() => setMonthFilter(key)}>
               {monthTitle(key)}
             </Chip>
           ))}
@@ -121,9 +159,9 @@ export default function EntriesScreen() {
           <>
             <Label>Osoba</Label>
             <Chips scroll>
-              <Chip on={personId === ""} onPress={() => setPersonId("")}>Svi</Chip>
+              <Chip on={personId === ""} onPress={() => setPersonFilter("")}>Svi</Chip>
               {people.map((person) => (
-                <Chip key={person.id} on={personId === person.id} onPress={() => setPersonId(person.id)}>
+                <Chip key={person.id} on={personId === person.id} onPress={() => setPersonFilter(person.id)}>
                   {person.name}
                 </Chip>
               ))}
@@ -132,9 +170,9 @@ export default function EntriesScreen() {
         ) : null}
         <Label>Kategorija</Label>
         <Chips scroll>
-          <Chip on={categoryId === ""} onPress={() => setCategoryId("")}>Sve</Chip>
+          <Chip on={categoryId === ""} onPress={() => setCategoryFilter("")}>Sve</Chip>
           {usedCategories.map((category) => (
-            <Chip key={category.id} on={categoryId === category.id} onPress={() => setCategoryId(category.id)}>
+            <Chip key={category.id} on={categoryId === category.id} onPress={() => setCategoryFilter(category.id)}>
               {category.name}
             </Chip>
           ))}
@@ -187,6 +225,8 @@ const styles = StyleSheet.create({
     gap: space.md,
   },
   heading: { ...type.display, fontSize: 28, lineHeight: 34, color: colors.text },
+  clearCategory: { alignSelf: "flex-start", paddingVertical: space.xs },
+  clearCategoryText: { ...type.small, fontWeight: "600", color: colors.accent },
   filters: { gap: space.sm },
   dayHead: { paddingHorizontal: space.xs, marginTop: space.sm },
   group: { paddingVertical: 0, gap: 0 },

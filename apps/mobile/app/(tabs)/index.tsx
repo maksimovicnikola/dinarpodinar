@@ -236,7 +236,19 @@ export default function OverviewScreen() {
               <Muted>Nema troškova u ovom mesecu.</Muted>
             ) : (
               view.bars.map((bar) => (
-                <View key={bar.id} style={styles.bar}>
+                <Pressable
+                  key={bar.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Unosi kategorije ${bar.name}`}
+                  onPress={() =>
+                    router.push(
+                      `/lista?category=${encodeURIComponent(bar.id)}&month=${encodeURIComponent(month)}${
+                        personId ? `&person=${encodeURIComponent(personId)}` : ""
+                      }`,
+                    )
+                  }
+                  style={styles.bar}
+                >
                   <View style={styles.barHead}>
                     <Text style={styles.name}>{bar.name}</Text>
                     {bar.state === "near" || bar.state === "over" ? (
@@ -248,7 +260,7 @@ export default function OverviewScreen() {
                     {bar.limit ? ` / ${bar.limit}` : ""}
                   </Text>
                   <LimitBar width={bar.width} state={bar.state} />
-                </View>
+                </Pressable>
               ))
             )}
           </Card>

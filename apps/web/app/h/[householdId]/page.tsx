@@ -9,7 +9,7 @@ import {
   buildUpcoming,
   groupEntriesByDay,
 } from "@/lib/month-view";
-import { buildPeople, monthParam, selectPerson } from "@/lib/month-query";
+import { buildPeople, monthParam, selectCategory, selectPerson } from "@/lib/month-query";
 import { loginPathWithNext, uuidParam } from "@/lib/next-path";
 import {
   canManage,
@@ -129,6 +129,7 @@ export default async function MonthPage({
   const people = buildPeople(membershipRows);
   const person = selectPerson(query.person, people);
   const categoryRows = (categories.data ?? []).map(toCategoryRow);
+  const category = selectCategory(query.category, categoryRows);
   const entryRows = (entries.data ?? []).map(toEntryDetail);
   const current = entryRows.filter((entry) => monthKey(entry.occurredOn) === month);
   // Prvi mesec prozora nema prethodni, pa pravilo rasta ne važi.
@@ -150,7 +151,7 @@ export default async function MonthPage({
     currency,
     month,
     categories: categoryRows,
-    entries: current,
+    entries: category ? current.filter((entry) => entry.categoryId === category.id) : current,
     ...(person ? { personId: person.id } : {}),
   });
 
@@ -166,8 +167,17 @@ export default async function MonthPage({
   });
 
   const owner = canManage(role);
-  const href = (nextMonth: string, personId?: string) =>
-    `/h/${householdId}?month=${nextMonth}${personId ? `&person=${personId}` : ""}`;
+  const href = (
+    nextMonth: string,
+    filters: { personId?: string | null; categoryId?: string | null } = {},
+  ) => {
+    const search = new URLSearchParams({ month: nextMonth });
+    const selectedPerson = "personId" in filters ? filters.personId : person?.id;
+    const selectedCategory = "categoryId" in filters ? filters.categoryId : category?.id;
+    if (selectedPerson) search.set("person", selectedPerson);
+    if (selectedCategory) search.set("category", selectedCategory);
+    return `/h/${householdId}?${search.toString()}`;
+  };
   const days = groupEntriesByDay(ledger);
   const scope = person ? person.name : "Celo domaćinstvo";
 
@@ -198,7 +208,7 @@ export default async function MonthPage({
       <div className="filters">
         <nav className="stepper" aria-label="Izbor meseca">
           {nav.previous ? (
-            <a className="stepper__go" href={href(nav.previous.month, person?.id)} rel="prev">
+            <a className="stepper__go" href={href(nav.previous.month)} rel="prev">
               <span aria-hidden="true">‹</span>
               <span className="sr-only">{nav.previous.label}</span>
             </a>
@@ -209,7 +219,7 @@ export default async function MonthPage({
             {displayMonth(nav.current.label)}
           </span>
           {nav.next ? (
-            <a className="stepper__go" href={href(nav.next.month, person?.id)} rel="next">
+            <a className="stepper__go" href={href(nav.next.month)} rel="next">
               <span aria-hidden="true">›</span>
               <span className="sr-only">{nav.next.label}</span>
             </a>
@@ -221,7 +231,7 @@ export default async function MonthPage({
         <nav className="switch" aria-label="Filter po osobi">
           <a
             className={`switch__item${person ? "" : " switch__item--on"}`}
-            href={href(month)}
+            href={href(month, { personId: null })}
             aria-current={person ? undefined : "page"}
           >
             Svi
@@ -230,7 +240,7 @@ export default async function MonthPage({
             <a
               key={candidate.id}
               className={`switch__item${person?.id === candidate.id ? " switch__item--on" : ""}`}
-              href={href(month, candidate.id)}
+              href={href(month, { personId: candidate.id })}
               aria-current={person?.id === candidate.id ? "page" : undefined}
             >
               {candidate.name}
@@ -294,7 +304,13 @@ export default async function MonthPage({
                 {view.bars.map((bar) => (
                   <li className="bar" key={bar.categoryId}>
                     <span className="bar__name">
-                      {bar.name}
+                      <a
+                        className="bar__category-link"
+                        href={href(month, { categoryId: bar.categoryId })}
+                        aria-current={category?.id === bar.categoryId ? "page" : undefined}
+                      >
+                        {bar.name}
+                      </a>
                       {bar.archived ? <span className="tag">arhivirana</span> : null}
                       {bar.state === "near" || bar.state === "over" ? (
                         <span className={`tag tag--${bar.state}`}>{bar.percent}%</span>
@@ -345,18 +361,30 @@ export default async function MonthPage({
 
         <section className="card" aria-labelledby="unosi">
           <div className="card__head">
-            <h2 id="unosi">Unosi</h2>
+            <h2 id="unosi">{category ? `Unosi kategorije „${category.name}“` : "Unosi"}</h2>
             <p className="fine">{ledger.length === 0 ? "" : `${ledger.length} u mesecu`}</p>
           </div>
 
+          {category ? (
+            <p className="fine category-filter">
+              <a href={href(month, { categoryId: null })}>Ukloni filter kategorije</a>
+            </p>
+          ) : null}
+
           {days.length === 0 ? (
             <div className="empty stack">
-              <p>Ovaj mesec još nema unosa.</p>
               <p>
-                <a className="button" href={`/h/${householdId}/novi`}>
-                  Dodaj prvi unos
-                </a>
+                {category
+                  ? `Ovog meseca nema unosa kategorije „${category.name}“.`
+                  : "Ovaj mesec još nema unosa."}
               </p>
+              {category ? null : (
+                <p>
+                  <a className="button" href={`/h/${householdId}/novi`}>
+                    Dodaj prvi unos
+                  </a>
+                </p>
+              )}
             </div>
           ) : (
             <div className="days">

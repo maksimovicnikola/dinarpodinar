@@ -195,18 +195,10 @@ export default function NewEntryScreen() {
           </Chips>
         </View>
 
-        {household && household.people.length > 1 ? (
-          <View style={styles.section}>
-            <Label>Ko</Label>
-            <Chips>
-              {household.people.map((person) => (
-                <Chip key={person.id} on={personId === person.id} onPress={() => setPersonId(person.id)}>
-                  {person.name}
-                </Chip>
-              ))}
-            </Chips>
-          </View>
-        ) : null}
+        <View style={styles.section}>
+          <Label>Beleška</Label>
+          <Input value={note} onChangeText={setNote} placeholder="Nije obavezno" />
+        </View>
 
         <View style={styles.section}>
           <Label>Datum</Label>
@@ -224,10 +216,18 @@ export default function NewEntryScreen() {
           )}
         </View>
 
-        <View style={styles.section}>
-          <Label>Beleška</Label>
-          <Input value={note} onChangeText={setNote} placeholder="Nije obavezno" />
-        </View>
+        {household && household.people.length > 1 ? (
+          <View style={styles.section}>
+            <Label>Osoba</Label>
+            <Chips>
+              {household.people.map((person) => (
+                <Chip key={person.id} on={personId === person.id} onPress={() => setPersonId(person.id)}>
+                  {person.name}
+                </Chip>
+              ))}
+            </Chips>
+          </View>
+        ) : null}
 
         <View style={styles.repeat}>
           <View style={styles.repeatRow}>

@@ -226,24 +226,17 @@ export function EntryForm({
           </select>
         </Field>
 
-        <Field id="osoba" label="Osoba" hint="Ime se pamti uz unos i ostaje i ako osoba kasnije izađe.">
-          <select
-            id="osoba"
+        <Field id="beleska" label="Beleška" hint="Neobavezno. Na primer „pijaca“ ili „struja za avgust“.">
+          <input
+            id="beleska"
             className="input"
-            name="osoba"
-            value={state.personId}
-            onChange={(event) =>
-              setState((current) => ({ ...current, personId: event.target.value }))
-            }
-            disabled={people.length === 0}
-            aria-describedby="osoba-hint"
-          >
-            {people.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.name}
-              </option>
-            ))}
-          </select>
+            name="beleska"
+            type="text"
+            value={state.note}
+            onChange={(event) => setState((current) => ({ ...current, note: event.target.value }))}
+            maxLength={120}
+            aria-describedby="beleska-hint"
+          />
         </Field>
 
         <Field id="datum" label="Datum" hint="Podrazumevano je današnji dan u Beogradu.">
@@ -261,18 +254,28 @@ export function EntryForm({
           />
         </Field>
 
-        <Field id="beleska" label="Beleška" hint="Neobavezno. Na primer „pijaca“ ili „struja za avgust“.">
-          <input
-            id="beleska"
-            className="input"
-            name="beleska"
-            type="text"
-            value={state.note}
-            onChange={(event) => setState((current) => ({ ...current, note: event.target.value }))}
-            maxLength={120}
-            aria-describedby="beleska-hint"
-          />
-        </Field>
+        {people.length > 1 ? (
+          <Field id="osoba" label="Osoba" hint="Ime se pamti uz unos i ostaje i ako osoba kasnije izađe.">
+            <select
+              id="osoba"
+              className="input"
+              name="osoba"
+              value={state.personId}
+              onChange={(event) =>
+                setState((current) => ({ ...current, personId: event.target.value }))
+              }
+              aria-describedby="osoba-hint"
+            >
+              {people.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <input type="hidden" name="osoba" value={state.personId} />
+        )}
 
         <div className="check">
           <input

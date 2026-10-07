@@ -330,6 +330,19 @@ describe("učitavanje strane", () => {
     expect(page.markup).toContain('type="date"');
   });
 
+  it("beleška je odmah ispod kategorije, a osoba ispod datuma", async () => {
+    const page = await get(`/h/${householdId}/novi`, member.cookie);
+    const category = page.markup.indexOf('id="kategorija"');
+    const note = page.markup.indexOf('id="beleska"');
+    const date = page.markup.indexOf('id="datum"');
+    const person = page.markup.indexOf('id="osoba"');
+
+    expect(category).toBeGreaterThanOrEqual(0);
+    expect(note).toBeGreaterThan(category);
+    expect(date).toBeGreaterThan(note);
+    expect(person).toBeGreaterThan(date);
+  });
+
   it("prijavljeni član je izabrana osoba, a ne prvi po azbuci", async () => {
     // Spisak je sortiran srpski: „Ana“ (vlasnik) je prva, „Marko“ (prijavljen) druga.
     const page = await get(`/h/${householdId}/novi`, member.cookie);

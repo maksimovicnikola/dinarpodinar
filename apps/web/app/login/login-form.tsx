@@ -9,7 +9,7 @@ import { needsDisplayName } from "@/lib/display-name";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 import { validateDisplayName, validateEmail } from "@/lib/validation";
 
-type Step = "email" | "code" | "name";
+type Step = "email" | "sent" | "name";
 
 export function LoginForm({
   nextPath,
@@ -22,12 +22,11 @@ export function LoginForm({
 }) {
   const [step, setStep] = useState<Step>(askName ? "name" : "email");
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(notice);
   const [pending, setPending] = useState(false);
 
-  async function sendCode() {
+  async function sendLoginLink() {
     setError(null);
     const checkedEmail = validateEmail(email);
     if (!checkedEmail.ok) {
@@ -40,45 +39,18 @@ export function LoginForm({
       const supabase = createBrowserSupabase();
       const result = await supabase.auth.signInWithOtp({
         email: checkedEmail.value,
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
+        },
       });
       if (result.error) {
         setError(otpErrorMessage(result.error.message));
         return;
       }
       setEmail(checkedEmail.value);
-      setCode("");
-      setStep("code");
+      setStep("sent");
     } catch (caught) {
       setError(otpErrorMessage(caught instanceof Error ? caught.message : null));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function verifyCode() {
-    setError(null);
-    const token = code.trim();
-    if (!/^\d{6}$/.test(token)) {
-      setError("Kod ima šest cifara.");
-      return;
-    }
-
-    setPending(true);
-    try {
-      const supabase = createBrowserSupabase();
-      const result = await supabase.auth.verifyOtp({ email, token, type: "email" });
-      if (result.error || !result.data.session) {
-        setError("Kod nije ispravan ili je istekao. Zatražite novi.");
-        return;
-      }
-      if (needsDisplayName(result.data.user?.user_metadata)) {
-        setStep("name");
-        return;
-      }
-      window.location.assign(nextPath);
-    } catch {
-      setError("Prijava nije uspela. Proverite vezu i pokušajte ponovo.");
     } finally {
       setPending(false);
     }
@@ -98,7 +70,7 @@ export function LoginForm({
       const auth = await supabase.auth.getUser();
       const userId = auth.data.user?.id;
       if (!userId) {
-        setError("Prijava je istekla. Pošaljite novi kod.");
+        setError("Prijava je istekla. Pošaljite novi link.");
         setStep("email");
         return;
       }
@@ -125,18 +97,17 @@ export function LoginForm({
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (step === "email") void sendCode();
-    else if (step === "code") void verifyCode();
+    if (step === "email" || step === "sent") void sendLoginLink();
     else void saveName();
   }
 
-  const title = step === "code" ? "Upišite kod" : step === "name" ? "Vaše ime" : "Prijava";
+  const title = step === "sent" ? "Proverite e-poštu" : step === "name" ? "Vaše ime" : "Prijava";
   const lead =
-    step === "code"
-      ? `Poslali smo šestocifreni kod na ${email}.`
+    step === "sent"
+      ? `Poslali smo link za prijavu na ${email}. Otvorite ga u ovom pregledaču da biste nastavili.`
       : step === "name"
         ? "Ovako vas vide ostali u domaćinstvu. Pitamo samo jednom, za nov nalog."
-        : "Bez lozinke. Upišite e-poštu, a mi šaljemo kod za prijavu.";
+        : "Bez lozinke. Upišite e-poštu, a mi šaljemo link za prijavu.";
 
   return (
     <Passbook>
@@ -144,7 +115,7 @@ export function LoginForm({
 
       <form className="stack stack--loose" onSubmit={onSubmit} noValidate>
         {step === "email" ? (
-          <Field id="posta" label="E-pošta" hint="Na ovu adresu stiže kod za prijavu.">
+          <Field id="posta" label="E-pošta" hint="Na ovu adresu stiže link za prijavu.">
             <input
               id="posta"
               className="input"
@@ -160,21 +131,8 @@ export function LoginForm({
           </Field>
         ) : null}
 
-        {step === "code" ? (
-          <Field id="kod" label="Kod" hint="Šest cifara iz e-pošte.">
-            <input
-              id="kod"
-              className="input input--code"
-              name="kod"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-              aria-describedby="kod-hint"
-              autoFocus
-              required
-            />
-          </Field>
+        {step === "sent" ? (
+          <p className="fine">Ako poruka ne stigne, proverite neželjenu poštu ili pošaljite novi link.</p>
         ) : null}
 
         {step === "name" ? (
@@ -199,29 +157,27 @@ export function LoginForm({
         <div className="row">
           <button type="submit" className="button" disabled={pending}>
             {pending
-              ? step === "code"
-                ? "Proveravam…"
-                : step === "name"
-                  ? "Čuvam…"
-                  : "Šaljem…"
-              : step === "code"
-                ? "Prijavi me"
-                : step === "name"
-                  ? "Sačuvaj ime"
-                  : "Pošalji kod"}
+              ? step === "name"
+                ? "Čuvam…"
+                : "Šaljem…"
+              : step === "name"
+                ? "Sačuvaj ime"
+                : step === "sent"
+                  ? "Pošalji novi link"
+                  : "Pošalji link"}
           </button>
-          {step === "code" ? (
+          {step === "sent" ? (
             <button
               type="button"
               className="button button--quiet"
               disabled={pending}
-              onClick={() => void sendCode()}
+              onClick={() => {
+                setError(null);
+                setStep("email");
+              }}
             >
-              Pošalji novi kod
+              Promeni adresu e-pošte
             </button>
-          ) : null}
-          {step === "email" ? (
-            <p className="fine">Kod važi kratko. Ako ne stigne, proverite neželjenu poštu.</p>
           ) : null}
         </div>
       </form>

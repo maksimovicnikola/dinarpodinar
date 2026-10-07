@@ -40,7 +40,7 @@ describe("e-pošta", () => {
     expect(validateEmail("  Ana@Primer.RS ")).toEqual({ ok: true, value: "ana@primer.rs" });
     expect(validateEmail("   ")).toEqual({
       ok: false,
-      message: "Unesite adresu e-pošte na koju šaljemo kod za prijavu.",
+      message: "Unesite adresu e-pošte na koju šaljemo link za prijavu.",
     });
     expect(validateEmail("ana@primer")).toMatchObject({ ok: false });
   });

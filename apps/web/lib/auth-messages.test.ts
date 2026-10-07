@@ -16,7 +16,7 @@ describe("loginErrorMessage", () => {
   });
 
   it("prevodi poznate kodove", () => {
-    expect(loginErrorMessage("bez-koda")).toMatch(/nije sadržao kod/);
+    expect(loginErrorMessage("bez-koda")).toMatch(/nije potpun/);
     expect(loginErrorMessage("razmena")).toMatch(/istekao/);
     expect(loginErrorMessage("link")).toMatch(/nije uspela/);
     expect(loginErrorMessage("kolacici")).toMatch(/kolačiće/);

@@ -28,7 +28,7 @@ export function validateEmail(raw: string): Checked {
   const value = normalizeEmail(raw);
 
   if (value.length === 0) {
-    return { ok: false, message: "Unesite adresu e-pošte na koju šaljemo kod za prijavu." };
+    return { ok: false, message: "Unesite adresu e-pošte na koju šaljemo link za prijavu." };
   }
 
   if (value.length > MAX_EMAIL_LENGTH) {

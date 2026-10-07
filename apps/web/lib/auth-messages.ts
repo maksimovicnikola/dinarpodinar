@@ -16,7 +16,7 @@ export function loginErrorMessage(code: string | null | undefined): string | nul
     case "":
       return null;
     case "bez-koda":
-      return "Link za prijavu nije sadržao kod. Pošaljite novi link.";
+      return "Link za prijavu nije potpun ili je istekao. Pošaljite novi link.";
     case "razmena":
       return "Link za prijavu je istekao ili je već iskorišćen. Pošaljite novi.";
     case "link":
@@ -28,7 +28,7 @@ export function loginErrorMessage(code: string | null | undefined): string | nul
   }
 }
 
-/** Poruka za neuspelo slanje magičnog linka. */
+/** Poruka za neuspelo slanje linka za prijavu. */
 export function otpErrorMessage(raw: string | null | undefined): string {
   const value = (raw ?? "").toLowerCase();
 
@@ -48,7 +48,7 @@ export function otpErrorMessage(raw: string | null | undefined): string {
     return "Nema veze sa serverom. Proverite internet i pokušajte ponovo.";
   }
 
-  return "Kod nije poslat. Proverite adresu e-pošte i pokušajte ponovo.";
+  return "Link za prijavu nije poslat. Proverite adresu e-pošte i pokušajte ponovo.";
 }
 
 export type InvitationErrorCode =

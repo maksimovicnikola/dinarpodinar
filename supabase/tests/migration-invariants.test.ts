@@ -123,6 +123,19 @@ function lastRpcBody(): string {
   return bodies.at(-1)?.[0] ?? "";
 }
 
+function lastCreateHouseholdBody(): string {
+  const bodies = [...sql.matchAll(/create or replace function public\.create_household[\s\S]*?\$\$;/g)];
+  return bodies.at(-1)?.[0] ?? "";
+}
+
+describe("otvaranje domaćinstva", () => {
+  it("pravi vlasnika, ali ne i početne kategorije", () => {
+    const body = lastCreateHouseholdBody();
+    expect(body).toMatch(/insert into public\.memberships/);
+    expect(body).not.toMatch(/insert into public\.categories/);
+  });
+});
+
 describe("atomičan unos sa ponavljanjem", () => {
   it("funkcija postoji i radi oba upisa", () => {
     expect(lastRpcBody()).toMatch(

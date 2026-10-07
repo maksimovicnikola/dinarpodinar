@@ -184,6 +184,10 @@ export default async function SettingsPage({
   const categoryRows = sortByName(categories.data ?? []);
   const active = categoryRows.filter((category) => !category.archived);
   const archived = categoryRows.filter((category) => category.archived);
+  const activeExpenses = active.filter((category) => category.kind === "expense");
+  const activeIncomes = active.filter((category) => category.kind === "income");
+  const archivedExpenses = archived.filter((category) => category.kind === "expense");
+  const archivedIncomes = archived.filter((category) => category.kind === "income");
   const people = buildMembers(membershipRows);
   const waiting = pendingInvitations(invitations.data ?? [], nowMs);
 
@@ -219,47 +223,57 @@ export default async function SettingsPage({
           <CreateCategoryForm householdId={householdId} />
 
           <div className="stack">
-            <h3>Aktivne</h3>
-            {active.length === 0 ? (
-              <p className="fine">
-                Nijedna aktivna kategorija. Dok je nema, nov unos nema šta da izabere.
-              </p>
-            ) : (
-              <ul className="list stack stack--loose">
-                {active.map((category) => (
-                  <li className="group stack" key={category.id}>
-                    <p className="ledger__title">
-                      {category.name}
-                      <span className="tag tag--quiet">
-                        {category.kind === "expense" ? "trošak" : "prihod"}
-                      </span>
-                    </p>
+            <h3>Aktivne kategorije</h3>
+            <div className="category-groups">
+              {[
+                { title: "Rashodi", kind: "expense", rows: activeExpenses },
+                { title: "Prihodi", kind: "income", rows: activeIncomes },
+              ].map(({ title, kind, rows }) => (
+                <section
+                  className={`category-group category-group--${kind}`}
+                  key={kind}
+                  aria-labelledby={`active-${kind}-heading`}
+                >
+                  <div className="category-group__heading">
+                    <h4 id={`active-${kind}-heading`}>{title}</h4>
+                    <span className="tag tag--quiet">{rows.length}</span>
+                  </div>
+                  {rows.length === 0 ? (
+                    <p className="fine">Još nema kategorija {kind === "expense" ? "rashoda" : "prihoda"}.</p>
+                  ) : (
+                    <ul className="list stack stack--loose">
+                      {rows.map((category) => (
+                        <li className="group stack" key={category.id}>
+                          <p className="ledger__title">{category.name}</p>
 
-                    <RenameCategoryForm
-                      householdId={householdId}
-                      categoryId={category.id}
-                      name={category.name}
-                    />
+                          <RenameCategoryForm
+                            householdId={householdId}
+                            categoryId={category.id}
+                            name={category.name}
+                          />
 
-                    {category.kind === "expense" ? (
-                      <LimitForm
-                        householdId={householdId}
-                        categoryId={category.id}
-                        limit={minorToInput(category.limit_minor)}
-                      />
-                    ) : (
-                      <p className="fine">Prihod nema limit.</p>
-                    )}
+                          {category.kind === "expense" ? (
+                            <LimitForm
+                              householdId={householdId}
+                              categoryId={category.id}
+                              limit={minorToInput(category.limit_minor)}
+                            />
+                          ) : (
+                            <p className="fine">Prihod nema limit.</p>
+                          )}
 
-                    <ArchiveCategoryForm householdId={householdId} categoryId={category.id} />
-                  </li>
-                ))}
-              </ul>
-            )}
+                          <ArchiveCategoryForm householdId={householdId} categoryId={category.id} />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              ))}
+            </div>
           </div>
 
           <div className="stack">
-            <h3>Arhivirane</h3>
+            <h3>Arhivirane kategorije</h3>
             {archived.length === 0 ? (
               <p className="fine">Nijedna arhivirana kategorija.</p>
             ) : (
@@ -268,29 +282,47 @@ export default async function SettingsPage({
                   Ostaju u istoriji meseca, ne primaju nove unose i nemaju aktivna ponavljanja.
                   Limit se i ovde može ukloniti, da prag prestane da se javlja.
                 </p>
-                <ul className="list stack stack--loose">
-                  {archived.map((category) => (
-                    <li className="group stack" key={category.id}>
-                      <p className="ledger__title">
-                        {category.name}
-                        <span className="tag tag--quiet">
-                          {category.kind === "expense" ? "trošak" : "prihod"}
-                        </span>
-                        <span className="tag tag--quiet">arhivirana</span>
-                      </p>
-
-                      {category.kind === "expense" ? (
-                        <LimitForm
-                          householdId={householdId}
-                          categoryId={category.id}
-                          limit={minorToInput(category.limit_minor)}
-                        />
+                <div className="category-groups">
+                  {[
+                    { title: "Rashodi", kind: "expense", rows: archivedExpenses },
+                    { title: "Prihodi", kind: "income", rows: archivedIncomes },
+                  ].map(({ title, kind, rows }) => (
+                    <section
+                      className={`category-group category-group--${kind}`}
+                      key={kind}
+                      aria-labelledby={`archived-${kind}-heading`}
+                    >
+                      <div className="category-group__heading">
+                        <h4 id={`archived-${kind}-heading`}>{title}</h4>
+                        <span className="tag tag--quiet">{rows.length}</span>
+                      </div>
+                      {rows.length === 0 ? (
+                        <p className="fine">Nema arhiviranih kategorija {kind === "expense" ? "rashoda" : "prihoda"}.</p>
                       ) : (
-                        <p className="fine">Prihod nema limit.</p>
+                        <ul className="list stack stack--loose">
+                          {rows.map((category) => (
+                            <li className="group stack" key={category.id}>
+                              <p className="ledger__title">
+                                {category.name}
+                                <span className="tag tag--quiet">arhivirana</span>
+                              </p>
+
+                              {category.kind === "expense" ? (
+                                <LimitForm
+                                  householdId={householdId}
+                                  categoryId={category.id}
+                                  limit={minorToInput(category.limit_minor)}
+                                />
+                              ) : (
+                                <p className="fine">Prihod nema limit.</p>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
                       )}
-                    </li>
+                    </section>
                   ))}
-                </ul>
+                </div>
               </>
             )}
           </div>

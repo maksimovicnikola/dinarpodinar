@@ -201,6 +201,54 @@ a:hover {
   padding: 1.25rem 1.5rem;
 }
 
+.category-groups {
+  display: grid;
+  gap: 1rem;
+}
+
+.category-group {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  min-width: 0;
+  padding: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.category-group--expense {
+  border-top: 3px solid var(--near);
+}
+
+.category-group--income {
+  border-top: 3px solid var(--plus);
+}
+
+.category-group__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.category-group__heading h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.category-group .group {
+  padding: 1rem;
+}
+
+@media (min-width: 48rem) {
+  .category-groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
 @media (min-width: 70rem) {
   .settings {
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);

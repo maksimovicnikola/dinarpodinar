@@ -484,6 +484,16 @@ afterAll(async () => {
 // ----------------------------------------------------------------
 
 describe("strana podešavanja", () => {
+  it("novo domaćinstvo nema početne kategorije", async () => {
+    const found = await adminClient()
+      .from("categories")
+      .select("id")
+      .eq("household_id", domA);
+
+    expect(found.error).toBeNull();
+    expect(found.data).toEqual([]);
+  });
+
   it("neprijavljen posetilac ide na prijavu i strana pamti odakle je došao", async () => {
     const page = await get(`/h/${domA}/podesavanja`);
 
@@ -497,6 +507,8 @@ describe("strana podešavanja", () => {
 
     expect(page.status).toBe(200);
     expect(page.markup).toContain(`Naša kuća ${runStamp}`);
+    expect(page.markup).toContain("Rashodi");
+    expect(page.markup).toContain("Prihodi");
     for (const label of [
       "Dodaj kategoriju",
       "Sačuvaj naziv",

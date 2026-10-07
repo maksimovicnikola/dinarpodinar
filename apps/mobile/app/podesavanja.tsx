@@ -149,6 +149,18 @@ export default function SettingsScreen() {
   const owner = household?.role === "owner";
   const names = new Map(household?.categories.map((category) => [category.id, category.name]) ?? []);
   const people = new Map(members.map((member) => [member.id, member.name]));
+  const activeExpenses = (household?.categories ?? [])
+    .filter((category) => !category.archived && category.kind === "expense")
+    .sort((a, b) => a.name.localeCompare(b.name, "sr"));
+  const activeIncomes = (household?.categories ?? [])
+    .filter((category) => !category.archived && category.kind === "income")
+    .sort((a, b) => a.name.localeCompare(b.name, "sr"));
+  const archivedExpenses = (household?.categories ?? [])
+    .filter((category) => category.archived && category.kind === "expense")
+    .sort((a, b) => a.name.localeCompare(b.name, "sr"));
+  const archivedIncomes = (household?.categories ?? [])
+    .filter((category) => category.archived && category.kind === "income")
+    .sort((a, b) => a.name.localeCompare(b.name, "sr"));
 
   return (
     <Screen>
@@ -195,41 +207,53 @@ export default function SettingsScreen() {
             >
               Dodaj kategoriju
             </Button>
-            <Label>Aktivne</Label>
-            {household.categories.filter((category) => !category.archived).length === 0 ? (
-              <Muted>Nijedna aktivna kategorija.</Muted>
-            ) : (
-              household.categories
-                .filter((category) => !category.archived)
-                .sort((a, b) => a.name.localeCompare(b.name, "sr"))
-                .map((category) => (
-                  <CategoryEditor
-                    key={`${category.id}:${category.name}:${category.limitMinor}`}
-                    category={category}
-                    householdId={household.householdId}
-                    busy={busy}
-                    onRun={run}
-                  />
-                ))
-            )}
-            <Label>Arhivirane</Label>
-            {household.categories.filter((category) => category.archived).length === 0 ? (
-              <Muted>Nijedna arhivirana kategorija.</Muted>
-            ) : (
-              household.categories
-                .filter((category) => category.archived)
-                .sort((a, b) => a.name.localeCompare(b.name, "sr"))
-                .map((category) => (
-                  <CategoryEditor
-                    key={`${category.id}:${category.name}:${category.limitMinor}:archived`}
-                    category={category}
-                    householdId={household.householdId}
-                    busy={busy}
-                    onRun={run}
-                    archived
-                  />
-                ))
-            )}
+            <View style={styles.categorySections}>
+              <CategorySection
+                title="Rashodi"
+                kind="expense"
+                empty="Još nema kategorija rashoda."
+                categories={activeExpenses}
+                householdId={household.householdId}
+                busy={busy}
+                onRun={run}
+              />
+              <CategorySection
+                title="Prihodi"
+                kind="income"
+                empty="Još nema kategorija prihoda."
+                categories={activeIncomes}
+                householdId={household.householdId}
+                busy={busy}
+                onRun={run}
+              />
+            </View>
+
+            <View style={styles.archivedSections}>
+              <Label>Arhivirane kategorije</Label>
+              <Muted>Ostaju u istoriji, ali ne primaju nove unose.</Muted>
+              <View style={styles.categorySections}>
+                <CategorySection
+                  title="Rashodi"
+                  kind="expense"
+                  empty="Nema arhiviranih kategorija rashoda."
+                  categories={archivedExpenses}
+                  householdId={household.householdId}
+                  busy={busy}
+                  onRun={run}
+                  archived
+                />
+                <CategorySection
+                  title="Prihodi"
+                  kind="income"
+                  empty="Nema arhiviranih kategorija prihoda."
+                  categories={archivedIncomes}
+                  householdId={household.householdId}
+                  busy={busy}
+                  onRun={run}
+                  archived
+                />
+              </View>
+            </View>
           </Card>
 
           <Card>
@@ -367,6 +391,55 @@ function CategoryEditor({
   );
 }
 
+function CategorySection({
+  title,
+  kind,
+  empty,
+  categories,
+  householdId,
+  busy,
+  onRun,
+  archived = false,
+}: {
+  title: string;
+  kind: "expense" | "income";
+  empty: string;
+  categories: CategoryRow[];
+  householdId: string;
+  busy: boolean;
+  onRun: (work: () => Promise<Outcome>) => Promise<Outcome | null>;
+  archived?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.categorySection,
+        kind === "income" ? styles.categorySectionIncome : styles.categorySectionExpense,
+        archived ? styles.categorySectionArchived : null,
+      ]}
+    >
+      <View style={styles.categoryHeading}>
+        <Text style={styles.categoryTitle}>{title}</Text>
+        <Text style={styles.categoryCount}>{categories.length}</Text>
+      </View>
+      {categories.length === 0 ? (
+        <Muted>{empty}</Muted>
+      ) : (
+        categories.map((category) => (
+          <CategoryEditor
+            key={`${category.id}:${category.name}:${category.limitMinor}${archived ? ":archived" : ""}`}
+            category={category}
+            householdId={householdId}
+            busy={busy}
+            onRun={onRun}
+            archived={archived}
+          />
+        ))
+      )}
+    </View>
+  );
+}
+
 function RuleEditor({
   rule,
   title,
@@ -457,6 +530,31 @@ function expiryLabel(expiresAt: string): string {
 
 const styles = StyleSheet.create({
   heading: { ...type.title, color: colors.text },
+  categorySections: { gap: space.md },
+  archivedSections: {
+    gap: space.sm,
+    marginTop: space.sm,
+    paddingTop: space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.line,
+  },
+  categorySection: {
+    gap: space.sm,
+    padding: space.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+    borderTopWidth: 3,
+    borderRadius: 12,
+    backgroundColor: colors.bg,
+  },
+  categorySectionExpense: { borderTopColor: colors.near },
+  categorySectionIncome: { borderTopColor: colors.plus },
+  categorySectionArchived: {
+    borderTopColor: colors.muted,
+  },
+  categoryHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm },
+  categoryTitle: { ...type.body, fontWeight: "600", color: colors.text },
+  categoryCount: { ...type.small, color: colors.muted },
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm },
   rowText: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
   name: { ...type.body, fontWeight: "500", color: colors.text },

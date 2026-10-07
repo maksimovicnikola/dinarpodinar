@@ -119,10 +119,21 @@ it("član ne vidi tuđe domaćinstvo i ne menja unos", async () => {
 
   const categories = await ownerApi.from("categories").select("id, name, kind").eq("household_id", householdId);
   expect(categories.error).toBeNull();
-  expect(categories.data?.map((row) => row.name).sort()).toEqual(
-    ["Hrana", "Ostalo", "Ostalo", "Plata", "Prevoz", "Računi", "Zdravlje"].sort(),
-  );
-  const food = categories.data?.find((row) => row.name === "Hrana" && row.kind === "expense");
+  expect(categories.data).toEqual([]);
+
+  const addedCategories = await ownerApi
+    .from("categories")
+    .insert([
+      { household_id: householdId, name: "Hrana", kind: "expense" },
+      { household_id: householdId, name: "Plata", kind: "income" },
+    ])
+    .select("id, name, kind");
+  expect(addedCategories.error).toBeNull();
+  expect(addedCategories.data?.map(({ name, kind }) => ({ name, kind }))).toEqual([
+    { name: "Hrana", kind: "expense" },
+    { name: "Plata", kind: "income" },
+  ]);
+  const food = addedCategories.data?.find((row) => row.kind === "expense");
   expect(food).toBeTruthy();
 
   await addMember(owner, member, householdId);

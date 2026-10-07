@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 
 import { Field, Notice } from "@/components/form";
+import { CategoryCombobox } from "@/components/category-combobox";
 import { Passbook, PassbookHeader, Ruler } from "@/components/passbook";
 import {
   canSend,
@@ -207,23 +208,12 @@ export function EntryForm({
               : "Prihodi nemaju limit."
           }
         >
-          <select
-            id="kategorija"
-            className="input"
-            name="kategorija"
+          <CategoryCombobox
+            categories={visibleCategories}
             value={state.categoryId}
-            onChange={(event) =>
-              setState((current) => ({ ...current, categoryId: event.target.value }))
-            }
-            disabled={visibleCategories.length === 0}
-            aria-describedby="kategorija-hint"
-          >
-            {visibleCategories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+            onChange={(categoryId) => setState((current) => ({ ...current, categoryId }))}
+            hintId="kategorija-hint"
+          />
         </Field>
 
         <Field id="beleska" label="Beleška" hint="Neobavezno. Na primer „pijaca“ ili „struja za avgust“.">

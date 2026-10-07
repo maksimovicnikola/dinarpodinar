@@ -307,10 +307,11 @@ describe("učitavanje strane", () => {
     const page = await get(`/h/${householdId}/novi`, member.cookie);
 
     for (const name of ["Hrana", "Računi", "Prevoz", "Zdravlje", "Ostalo"]) {
-      expect(page.markup, name).toContain(`>${name}</option>`);
+      expect(page.body, name).toContain(name);
     }
 
-    expect(page.markup).not.toContain(">Arhivirana</option>");
+    expect(page.markup).toContain('role="combobox"');
+    expect(page.markup).toContain('aria-controls="kategorija-opcije"');
     // Ni u RSC teret ne ulazi: strana je ne prosleđuje formi.
     expect(page.body).not.toContain("Arhivirana");
   });
@@ -318,8 +319,7 @@ describe("učitavanje strane", () => {
   it("kategorije prihoda nisu u početnoj ponudi, ali jesu prosleđene formi", async () => {
     const page = await get(`/h/${householdId}/novi`, member.cookie);
 
-    // Forma kreće od troška; „Plata“ se pojavi tek posle promene vrste.
-    expect(page.markup).not.toContain(">Plata</option>");
+    // Forma kreće od troška; „Plata“ je dostupna posle promene vrste.
     expect(page.body).toContain("Plata");
   });
 

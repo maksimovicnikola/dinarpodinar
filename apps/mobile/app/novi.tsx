@@ -3,7 +3,17 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
 import { Button, Chip, Chips, Input, Label, Muted, Notice, Screen, Segmented } from "../components/ui";
 import { dayLabel } from "../lib/format";
@@ -24,6 +34,8 @@ export default function NewEntryScreen() {
   const [kind, setKind] = useState<Kind>("expense");
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [categoryQuery, setCategoryQuery] = useState("");
   const [personId, setPersonId] = useState("");
   const [when, setWhen] = useState<When>("today");
   const [otherDay, setOtherDay] = useState(today);
@@ -54,6 +66,10 @@ export default function NewEntryScreen() {
   const visible = (household?.categories ?? [])
     .filter((category) => category.kind === kind && !category.archived)
     .sort((a, b) => a.name.localeCompare(b.name, "sr"));
+  const selectedCategory = visible.find((category) => category.id === categoryId);
+  const filteredCategories = visible.filter((category) =>
+    category.name.toLocaleLowerCase("sr").includes(categoryQuery.trim().toLocaleLowerCase("sr")),
+  );
   const occurredOn = when === "today" ? today : when === "yesterday" ? yesterday : otherDay;
   const pickerDate = useMemo(() => belgradeNoon(otherDay), [otherDay]);
 
@@ -185,14 +201,25 @@ export default function NewEntryScreen() {
 
         <View style={styles.section}>
           <Label>Kategorija</Label>
-          {household && visible.length === 0 ? <Muted>Kategorije se dodaju u Podešavanjima.</Muted> : null}
-          <Chips>
-            {visible.map((category) => (
-              <Chip key={category.id} on={categoryId === category.id} onPress={() => setCategoryId(category.id)}>
-                {category.name}
-              </Chip>
-            ))}
-          </Chips>
+          {visible.length === 0 ? (
+            <Muted>Kategorije se dodaju u Podešavanjima.</Muted>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Kategorija: ${selectedCategory?.name ?? "nije izabrana"}`}
+              accessibilityHint="Otvara pretragu kategorija"
+              onPress={() => {
+                setCategoryQuery("");
+                setCategoryPickerOpen(true);
+              }}
+              style={styles.categorySelect}
+            >
+              <Text style={[styles.categorySelectText, !selectedCategory ? styles.categoryPlaceholder : null]}>
+                {selectedCategory?.name ?? "Izaberite kategoriju"}
+              </Text>
+              <Text style={styles.categoryChevron}>⌄</Text>
+            </Pressable>
+          )}
         </View>
 
         <View style={styles.section}>
@@ -251,6 +278,78 @@ export default function NewEntryScreen() {
 
         {error ? <Notice>{error}</Notice> : null}
       </Screen>
+      <Modal
+        visible={categoryPickerOpen}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setCategoryPickerOpen(false)}
+      >
+        <View style={styles.categoryBackdrop}>
+          <Pressable
+            accessibilityLabel="Zatvori izbor kategorije"
+            style={StyleSheet.absoluteFill}
+            onPress={() => setCategoryPickerOpen(false)}
+          />
+          <KeyboardAvoidingView behavior="padding" style={styles.categorySheetWrap}>
+            <View style={styles.categorySheet} accessibilityViewIsModal>
+              <View style={styles.categorySheetHeading}>
+                <Text style={styles.categorySheetTitle}>Izaberite kategoriju</Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Zatvori"
+                  hitSlop={8}
+                  onPress={() => setCategoryPickerOpen(false)}
+                  style={styles.close}
+                >
+                  <SymbolView name="xmark" tintColor={colors.muted} size={14} weight="bold" />
+                </Pressable>
+              </View>
+              <Input
+                value={categoryQuery}
+                onChangeText={setCategoryQuery}
+                placeholder="Pretraži kategorije"
+                autoFocus
+                accessibilityLabel="Pretraži kategorije"
+                returnKeyType="search"
+              />
+              <FlatList
+                style={styles.categoryList}
+                data={filteredCategories}
+                keyExtractor={(category) => category.id}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                initialNumToRender={20}
+                maxToRenderPerBatch={20}
+                windowSize={7}
+                ListEmptyComponent={<Muted>Kategorija nije pronađena.</Muted>}
+                renderItem={({ item }) => {
+                  const selected = item.id === categoryId;
+                  return (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => {
+                        setCategoryId(item.id);
+                        setCategoryPickerOpen(false);
+                        setCategoryQuery("");
+                      }}
+                      style={({ pressed }) => [
+                        styles.categoryOption,
+                        selected ? styles.categoryOptionSelected : null,
+                        pressed ? styles.categoryOptionPressed : null,
+                      ]}
+                    >
+                      <Text style={styles.categoryOptionText}>{item.name}</Text>
+                      {selected ? <Text style={styles.categoryCheck}>✓</Text> : null}
+                    </Pressable>
+                  );
+                }}
+              />
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
       <Modal visible={pickerOpen} transparent animationType="fade" onRequestClose={() => setPickerOpen(false)}>
         <View style={styles.backdrop}>
           <Pressable accessibilityLabel="Zatvori kalendar" style={StyleSheet.absoluteFill} onPress={() => setPickerOpen(false)} />
@@ -326,6 +425,52 @@ const styles = StyleSheet.create({
   },
   currency: { ...type.body, color: colors.muted, fontWeight: "500" },
   section: { gap: space.sm },
+  categorySelect: {
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: space.md,
+    paddingHorizontal: space.md,
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    borderRadius: radius.control,
+    backgroundColor: colors.surface,
+  },
+  categorySelectText: { ...type.body, flex: 1, color: colors.text },
+  categoryPlaceholder: { color: colors.muted },
+  categoryChevron: { fontSize: 22, color: colors.muted, marginTop: -5 },
+  categoryBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(20, 23, 28, 0.4)",
+  },
+  categorySheetWrap: { width: "100%", height: "82%", justifyContent: "flex-end" },
+  categorySheet: {
+    height: "100%",
+    gap: space.md,
+    padding: space.lg,
+    paddingBottom: space.xl,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.card,
+    borderTopRightRadius: radius.card,
+  },
+  categoryList: { flex: 1 },
+  categorySheetHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md },
+  categorySheetTitle: { ...type.title, color: colors.text },
+  categoryOption: {
+    minHeight: 50,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: space.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+  },
+  categoryOptionSelected: { backgroundColor: colors.accentSoft },
+  categoryOptionPressed: { opacity: 0.7 },
+  categoryOptionText: { ...type.body, color: colors.text },
+  categoryCheck: { ...type.body, color: colors.accent, fontWeight: "700" },
   dateButton: {
     alignSelf: "flex-start",
     minHeight: 36,

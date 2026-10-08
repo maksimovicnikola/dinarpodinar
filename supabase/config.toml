@@ -248,11 +248,11 @@ otp_expiry = 3600
 # sender_name = "Admin"
 
 [auth.email.template.magic_link]
-subject = "Dinar po dinar: link i kod za prijavu"
+subject = "Dinar po dinar: kod za prijavu"
 content_path = "./supabase/templates/magic_link.html"
 
 [auth.email.template.confirmation]
-subject = "Dinar po dinar: link i kod za prijavu"
+subject = "Dinar po dinar: kod za prijavu"
 content_path = "./supabase/templates/magic_link.html"
 
 # Uncomment to customize email template

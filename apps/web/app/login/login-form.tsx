@@ -27,7 +27,7 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(notice);
   const [pending, setPending] = useState(false);
 
-  async function sendLoginLink() {
+  async function sendLoginCode() {
     setError(null);
     const checkedEmail = validateEmail(email);
     if (!checkedEmail.ok) {
@@ -38,12 +38,7 @@ export function LoginForm({
     setPending(true);
     try {
       const supabase = createBrowserSupabase();
-      const result = await supabase.auth.signInWithOtp({
-        email: checkedEmail.value,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
-        },
-      });
+      const result = await supabase.auth.signInWithOtp({ email: checkedEmail.value });
       if (result.error) {
         setError(otpErrorMessage(result.error.message));
         return;
@@ -102,7 +97,7 @@ export function LoginForm({
       const auth = await supabase.auth.getUser();
       const userId = auth.data.user?.id;
       if (!userId) {
-        setError("Prijava je istekla. Pošaljite novi link.");
+        setError("Prijava je istekla. Pošaljite novi kod.");
         setStep("email");
         return;
       }
@@ -129,7 +124,7 @@ export function LoginForm({
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (step === "email") void sendLoginLink();
+    if (step === "email") void sendLoginCode();
     else if (step === "code") void verifyEmailCode();
     else void saveName();
   }
@@ -137,21 +132,21 @@ export function LoginForm({
   const title = step === "code" ? "Proverite e-poštu" : step === "name" ? "Vaše ime" : "Prijava";
   const lead =
     step === "code"
-      ? `Poslali smo link i šestocifreni kod na ${email}. Ako link ne otvori prijavu, unesite kod ispod.`
+      ? `Poslali smo šestocifreni kod na ${email}. Unesite ga ispod da biste nastavili.`
       : step === "name"
         ? "Ovako vas vide ostali u domaćinstvu. Pitamo samo jednom, za nov nalog."
-        : "Bez lozinke. Upišite e-poštu, a mi šaljemo link za prijavu.";
+        : "Bez lozinke. Upišite e-poštu, a mi šaljemo šestocifreni kod za prijavu.";
   const submitLabel = pending
     ? step === "name"
       ? "Čuvam…"
       : step === "code"
         ? "Proveravam…"
-        : "Šaljem…"
+        : "Šaljem kod…"
     : step === "name"
       ? "Sačuvaj ime"
       : step === "code"
         ? "Potvrdi kod"
-        : "Pošalji link";
+        : "Pošalji kod";
 
   return (
     <Passbook>
@@ -159,7 +154,7 @@ export function LoginForm({
 
       <form className="stack stack--loose" onSubmit={onSubmit} noValidate>
         {step === "email" ? (
-          <Field id="posta" label="E-pošta" hint="Na ovu adresu stiže link za prijavu.">
+          <Field id="posta" label="E-pošta" hint="Na ovu adresu stiže kod za prijavu.">
             <input
               id="posta"
               className="input"
@@ -193,7 +188,7 @@ export function LoginForm({
                 required
               />
             </Field>
-            <p className="fine">Ako poruka ne stigne, proverite neželjenu poštu ili pošaljite novi link.</p>
+            <p className="fine">Ako poruka ne stigne, proverite neželjenu poštu ili pošaljite novi kod.</p>
           </>
         ) : null}
 
@@ -226,9 +221,9 @@ export function LoginForm({
                 type="button"
                 className="button button--quiet"
                 disabled={pending}
-                onClick={() => void sendLoginLink()}
+                onClick={() => void sendLoginCode()}
               >
-                Pošalji novi link
+                Pošalji novi kod
               </button>
               <button
                 type="button"

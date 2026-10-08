@@ -28,7 +28,7 @@ export function loginErrorMessage(code: string | null | undefined): string | nul
   }
 }
 
-/** Poruka za neuspelo slanje linka za prijavu. */
+/** Poruka za neuspelo slanje koda za prijavu. */
 export function otpErrorMessage(raw: string | null | undefined): string {
   const value = (raw ?? "").toLowerCase();
 
@@ -48,7 +48,7 @@ export function otpErrorMessage(raw: string | null | undefined): string {
     return "Nema veze sa serverom. Proverite internet i pokušajte ponovo.";
   }
 
-  return "Link za prijavu nije poslat. Proverite adresu e-pošte i pokušajte ponovo.";
+  return "Kod za prijavu nije poslat. Proverite adresu e-pošte i pokušajte ponovo.";
 }
 
 export type InvitationErrorCode =

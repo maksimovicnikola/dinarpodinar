@@ -110,6 +110,7 @@ export function CategoryCombobox({
                   type="button"
                   role="option"
                   aria-selected={category.id === value}
+                  onPointerDown={(event) => event.preventDefault()}
                   onClick={() => {
                     onChange(category.id);
                     setQuery("");

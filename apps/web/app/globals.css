@@ -322,6 +322,115 @@ a:hover {
   max-width: 46ch;
 }
 
+/* ---------- Javna SEO početna strana ---------- */
+
+.landing {
+  display: grid;
+  gap: clamp(3rem, 8vw, 6rem);
+  padding-block: clamp(2.5rem, 7vw, 6rem);
+}
+
+.landing__hero {
+  display: grid;
+  justify-items: start;
+  gap: 1.25rem;
+  max-width: 54rem;
+  padding-block: clamp(1rem, 4vw, 3rem);
+}
+
+.landing__hero h1 {
+  max-width: 14ch;
+  font-size: clamp(2.5rem, 1.5rem + 5vw, 5rem);
+  line-height: 1.04;
+  letter-spacing: -0.04em;
+}
+
+.landing__lead {
+  max-width: 58ch;
+  color: var(--muted);
+  font-size: clamp(1.0625rem, 1rem + 0.5vw, 1.25rem);
+}
+
+.landing__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.landing__section {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.landing__section-head {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.landing__section-head h2,
+.landing__closing h2 {
+  font-size: clamp(1.5rem, 1.25rem + 1.5vw, 2.25rem);
+}
+
+.landing__features {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.landing__feature {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  min-height: 9rem;
+  padding: clamp(1rem, 3vw, 1.5rem);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.landing__feature h3 {
+  font-size: 1.0625rem;
+}
+
+.landing__feature p {
+  color: var(--muted);
+  max-width: 48ch;
+}
+
+.landing__closing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: clamp(1.25rem, 4vw, 2rem);
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+}
+
+.landing__closing > div {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.landing__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+@media (min-width: 46rem) {
+  .landing__features {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .stack {
   display: grid;
   gap: 1rem;

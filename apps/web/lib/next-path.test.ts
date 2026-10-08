@@ -167,6 +167,7 @@ describe("uuidParam", () => {
 
 describe("isPublicPath", () => {
   it("propušta tačno javne strane", () => {
+    expect(isPublicPath("/")).toBe(true);
     expect(isPublicPath("/login")).toBe(true);
     expect(isPublicPath("/auth")).toBe(true);
   });
@@ -185,7 +186,6 @@ describe("isPublicPath", () => {
   });
 
   it("ne propušta zaštićene strane", () => {
-    expect(isPublicPath("/")).toBe(false);
     expect(isPublicPath("/novo")).toBe(false);
     expect(isPublicPath("/poziv/0f9f6f2a-2c5d-4f6f-9b1a-3b7d8e5c1a22")).toBe(false);
     expect(isPublicPath("/h/0f9f6f2a-2c5d-4f6f-9b1a-3b7d8e5c1a22")).toBe(false);
@@ -196,11 +196,13 @@ describe("isPublicPath", () => {
     expect(isPublicPath("/novo/auth")).toBe(false);
   });
 
-  it("javna strana nikad nije i dozvoljeno odredište posle prijave", () => {
+  it("prijava i auth nikad nisu odredište posle prijave", () => {
     for (const path of ["/login", "/login/", "/auth", "/auth/callback"]) {
       expect(isPublicPath(path), path).toBe(true);
       expect(safeNextPath(path), path).toBeNull();
     }
+    expect(isPublicPath("/")).toBe(true);
+    expect(safeNextPath("/")).toBe("/");
   });
 });
 

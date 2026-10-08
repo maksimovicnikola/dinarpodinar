@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((path: string) => {
@@ -21,8 +22,8 @@ const INVITE_TOKEN = "11111111-2222-4333-8444-555555555555";
 
 async function runHomePage() {
   try {
-    await HomePage();
-    return { redirectedTo: null };
+    const page = await HomePage();
+    return { redirectedTo: null, page };
   } catch (caught) {
     const path = (caught as { path?: unknown }).path;
     if (typeof path !== "string") {
@@ -35,6 +36,25 @@ async function runHomePage() {
 describe("HomePage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("renders an indexable public landing page for signed-out visitors", async () => {
+    mockedSupabase.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: null },
+          error: null,
+        }),
+      },
+    } as any);
+
+    const outcome = await runHomePage();
+
+    expect(outcome.redirectedTo).toBeNull();
+    expect(renderToStaticMarkup(outcome.page!)).toContain(
+      "Dinar po dinar pomaže domaćinstvu da na jednom mestu vodi prihode i troškove",
+    );
+    expect(renderToStaticMarkup(outcome.page!)).toContain('href="/login"');
   });
 
   it("redirects invited user to the pending invite instead of creating a new household", async () => {

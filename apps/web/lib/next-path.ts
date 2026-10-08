@@ -21,7 +21,7 @@ const BLOCKED_PREFIXES = ["/login", "/auth"];
  * `BLOCKED_PREFIXES`: danas su iste, ali „javno" i „nije odredište posle
  * prijave" nisu isto pravilo i ne smeju da se menjaju zajedno.
  */
-const PUBLIC_PREFIXES = ["/login", "/auth"];
+const PUBLIC_PREFIXES = ["/", "/login", "/auth"];
 
 export const DEFAULT_NEXT_PATH = "/";
 

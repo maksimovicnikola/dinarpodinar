@@ -238,8 +238,62 @@ a:hover {
   font-weight: 600;
 }
 
-.category-group .group {
-  padding: 1rem;
+.category-card {
+  min-width: 0;
+}
+
+.category-card__fieldset {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0.75rem 1rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.category-group--expense .category-card__fieldset {
+  border-inline-start: 3px solid var(--near);
+}
+
+.category-group--income .category-card__fieldset {
+  border-inline-start: 3px solid var(--plus);
+}
+
+.category-card__legend {
+  max-width: 100%;
+  padding-inline: 0.375rem;
+  font-size: 1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.category-card__legend .tag {
+  margin-inline-start: 0.5rem;
+  vertical-align: middle;
+}
+
+.category-card__fields {
+  display: grid;
+}
+
+.category-card__fields > * {
+  min-width: 0;
+  margin: 0;
+  padding-block: 0.875rem;
+}
+
+.category-card__fields > * + * {
+  border-top: 1px solid var(--line);
+}
+
+.category-card__fields > form:has(> .field):not(:has(> .field ~ .field)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.category-card__fields > form:has(> .field):not(:has(> .field ~ .field)) > .row {
+  grid-column: 1;
+  grid-row: auto;
+  margin-top: 0;
 }
 
 @media (min-width: 48rem) {
@@ -298,16 +352,6 @@ a:hover {
 
 .group .input--narrow {
   max-width: none;
-}
-
-.category-group .group > form:has(> .field):not(:has(> .field ~ .field)) {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.category-group .group > form:has(> .field):not(:has(> .field ~ .field)) > .row {
-  grid-column: 1;
-  grid-row: auto;
-  margin-top: 0;
 }
 
 .passbook__head {

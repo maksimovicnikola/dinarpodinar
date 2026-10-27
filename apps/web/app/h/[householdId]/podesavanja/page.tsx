@@ -243,26 +243,32 @@ export default async function SettingsPage({
                   ) : (
                     <ul className="list stack stack--loose">
                       {rows.map((category) => (
-                        <li className="group stack" key={category.id}>
-                          <p className="ledger__title">{category.name}</p>
+                        <li className="category-card" key={category.id}>
+                          <fieldset className="category-card__fieldset">
+                            <legend className="category-card__legend">{category.name}</legend>
+                            <div className="category-card__fields">
+                              <RenameCategoryForm
+                                householdId={householdId}
+                                categoryId={category.id}
+                                name={category.name}
+                              />
 
-                          <RenameCategoryForm
-                            householdId={householdId}
-                            categoryId={category.id}
-                            name={category.name}
-                          />
+                              {category.kind === "expense" ? (
+                                <LimitForm
+                                  householdId={householdId}
+                                  categoryId={category.id}
+                                  limit={minorToInput(category.limit_minor)}
+                                />
+                              ) : (
+                                <p className="fine">Prihod nema limit.</p>
+                              )}
 
-                          {category.kind === "expense" ? (
-                            <LimitForm
-                              householdId={householdId}
-                              categoryId={category.id}
-                              limit={minorToInput(category.limit_minor)}
-                            />
-                          ) : (
-                            <p className="fine">Prihod nema limit.</p>
-                          )}
-
-                          <ArchiveCategoryForm householdId={householdId} categoryId={category.id} />
+                              <ArchiveCategoryForm
+                                householdId={householdId}
+                                categoryId={category.id}
+                              />
+                            </div>
+                          </fieldset>
                         </li>
                       ))}
                     </ul>
@@ -301,21 +307,24 @@ export default async function SettingsPage({
                       ) : (
                         <ul className="list stack stack--loose">
                           {rows.map((category) => (
-                            <li className="group stack" key={category.id}>
-                              <p className="ledger__title">
-                                {category.name}
-                                <span className="tag tag--quiet">arhivirana</span>
-                              </p>
-
-                              {category.kind === "expense" ? (
-                                <LimitForm
-                                  householdId={householdId}
-                                  categoryId={category.id}
-                                  limit={minorToInput(category.limit_minor)}
-                                />
-                              ) : (
-                                <p className="fine">Prihod nema limit.</p>
-                              )}
+                            <li className="category-card" key={category.id}>
+                              <fieldset className="category-card__fieldset">
+                                <legend className="category-card__legend">
+                                  {category.name}
+                                  <span className="tag tag--quiet">arhivirana</span>
+                                </legend>
+                                <div className="category-card__fields">
+                                  {category.kind === "expense" ? (
+                                    <LimitForm
+                                      householdId={householdId}
+                                      categoryId={category.id}
+                                      limit={minorToInput(category.limit_minor)}
+                                    />
+                                  ) : (
+                                    <p className="fine">Prihod nema limit.</p>
+                                  )}
+                                </div>
+                              </fieldset>
                             </li>
                           ))}
                         </ul>

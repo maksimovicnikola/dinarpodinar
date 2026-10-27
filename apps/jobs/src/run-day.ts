@@ -62,7 +62,8 @@ export async function sendLimitAlerts(client: Admin, householdId: string, month:
     })),
   });
   for (const category of summary.categories) {
-    for (const threshold of limitThresholds(category.spentMinor, category.limitMinor)) {
+    const thresholds = limitThresholds(category.spentMinor, category.limitMinor);
+    for (const threshold of thresholds.slice(-1)) {
       const claimed = await claim(client, householdId, `limit:${category.categoryId}:${month}:${threshold}`);
       if (claimed) await pushToHousehold(client, householdId, `${category.name} je prešla ${threshold}% limita.`);
     }

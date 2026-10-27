@@ -224,7 +224,7 @@ export function buildMonthView(input: {
       return byName !== 0 ? byName : a.categoryId.localeCompare(b.categoryId);
     })
     .flatMap((category) =>
-      limitThresholds(category.spentMinor, category.limitMinor).map((threshold) => ({
+      limitThresholds(category.spentMinor, category.limitMinor).slice(-1).map((threshold) => ({
         categoryId: category.categoryId,
         name: category.name,
         archived: archivedById.get(category.categoryId) === true,

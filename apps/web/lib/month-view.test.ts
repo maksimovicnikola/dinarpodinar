@@ -82,7 +82,7 @@ it("sastavlja ostatak, traku i rečenicu iz domena", () => {
   });
   expect(view.expense).toBe("14.200 RSD");
   expect(view.sentence).toBe("Hrana je 4.200 RSD preko limita. Najveći deo: Marko.");
-  expect(view.alerts).toEqual(["Hrana je prešla 80% limita.", "Hrana je prešla 100% limita."]);
+  expect(view.alerts).toEqual(["Hrana je prešla 100% limita."]);
   expect(view.bars[0]?.width).toBe(100);
 });
 
@@ -196,7 +196,7 @@ describe("buildMonthView — filter po osobi", () => {
       state: "ok",
       percent: 40,
     });
-    expect(view.alerts).toEqual(["Hrana je prešla 80% limita.", "Hrana je prešla 100% limita."]);
+    expect(view.alerts).toEqual(["Hrana je prešla 100% limita."]);
   });
 
   it("prazno ime osobe pada na ceo prikaz umesto da ide u domen", () => {
@@ -420,7 +420,7 @@ describe("buildMonthView — pragovi i rečenice iz domena", () => {
       previous: null,
     });
 
-    expect(view.alerts).toEqual(["Hrana je prešla 80% limita.", "Hrana je prešla 100% limita."]);
+    expect(view.alerts).toEqual(["Hrana je prešla 100% limita."]);
     // Na tačno 100% nema prekoračenja, pa važi rečenica praga.
     expect(view.sentence).toBe("Hrana je na 100% limita. Najveći deo: Marko.");
   });
@@ -530,7 +530,6 @@ describe("buildMonthView — arhivirana i aktivna kategorija istog naziva", () =
 
     expect(rows.map((row) => [row.categoryId, row.threshold])).toEqual([
       ["food", 80],
-      ["food-old", 80],
       ["food-old", 100],
     ]);
   });
@@ -544,14 +543,13 @@ describe("buildMonthView — arhivirana i aktivna kategorija istog naziva", () =
   });
 
   it("upozorenje nosi zastavicu arhive", () => {
-    expect(view().alertRows.map((row) => row.archived)).toEqual([false, true, true]);
+    expect(view().alertRows.map((row) => row.archived)).toEqual([false, true]);
   });
 
   it("`alerts` ostaje niz niski, istim redosledom kao `alertRows`", () => {
     const result = view();
 
     expect(result.alerts).toEqual([
-      "Hrana je prešla 80% limita.",
       "Hrana je prešla 80% limita.",
       "Hrana je prešla 100% limita.",
     ]);

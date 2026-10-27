@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
 
 type CategoryOption = { id: string; name: string; label?: string };
 
@@ -23,6 +23,7 @@ export function CategoryCombobox({
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selected = categories.find((category) => category.id === value);
   const listId = `${inputId}-opcije`;
   const filtered = useMemo(() => {
@@ -34,10 +35,23 @@ export function CategoryCombobox({
       : categories;
   }, [categories, query]);
 
+  useEffect(
+    () => () => {
+      if (blurTimerRef.current !== null) clearTimeout(blurTimerRef.current);
+    },
+    [],
+  );
+
   function closeIfFocusLeaves(event: FocusEvent<HTMLDivElement>) {
     const nextTarget = event.relatedTarget;
     if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
-    setOpen(false);
+
+    if (blurTimerRef.current !== null) clearTimeout(blurTimerRef.current);
+    // Na dodir, gubitak fokusa može stići pre klika na opciju.
+    blurTimerRef.current = setTimeout(() => {
+      blurTimerRef.current = null;
+      if (!rootRef.current?.contains(document.activeElement)) setOpen(false);
+    }, 0);
   }
 
   function focusOption(event: KeyboardEvent<HTMLButtonElement>, direction: -1 | 1) {
@@ -72,6 +86,10 @@ export function CategoryCombobox({
         value={open ? query : selected?.label ?? selected?.name ?? ""}
         disabled={categories.length === 0}
         onFocus={() => {
+          if (blurTimerRef.current !== null) {
+            clearTimeout(blurTimerRef.current);
+            blurTimerRef.current = null;
+          }
           if (!open) {
             setQuery("");
             setOpen(true);
@@ -110,7 +128,7 @@ export function CategoryCombobox({
                   type="button"
                   role="option"
                   aria-selected={category.id === value}
-                  onPointerDown={(event) => event.preventDefault()}
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     onChange(category.id);
                     setQuery("");

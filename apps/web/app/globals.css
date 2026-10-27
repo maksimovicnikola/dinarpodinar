@@ -300,6 +300,16 @@ a:hover {
   max-width: none;
 }
 
+.category-group .group > form:has(> .field):not(:has(> .field ~ .field)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.category-group .group > form:has(> .field):not(:has(> .field ~ .field)) > .row {
+  grid-column: 1;
+  grid-row: auto;
+  margin-top: 0;
+}
+
 .passbook__head {
   display: grid;
   gap: 0.375rem;

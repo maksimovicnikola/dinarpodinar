@@ -189,7 +189,7 @@ export function LimitForm({
       <Field
         id={fieldId}
         label="Mesečni limit"
-        hint="Prazno polje znači bez limita. Zarez je decimala: 25.000 ili 1.500,50."
+        hint="Prazno = bez limita. Primeri: 25.000 ili 1.500,50."
       >
         <input
           id={fieldId}
@@ -232,11 +232,14 @@ export function ArchiveCategoryForm({
 
       <Outcome state={state} />
 
+      <p className="fine">
+        Raniji unosi ostaju u istoriji; novi unosi se zaustavljaju i ponavljanja gase.
+      </p>
+
       <div className="row">
         <SubmitButton quiet pendingLabel="Arhiviram…">
-          Arhiviraj
+          Arhiviraj kategoriju
         </SubmitButton>
-        <p className="fine">Ostaje u istoriji, ne prima nove unose, gasi svoja ponavljanja.</p>
       </div>
     </form>
   );

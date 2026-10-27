@@ -214,7 +214,7 @@ export default async function SettingsPage({
       <Passbook>
         <h2>Kategorije</h2>
         <p className="fine">
-          Vrsta i domaćinstvo se posle otvaranja ne menjaju. Limit prati samo trošak.
+          Vrsta kategorije se ne menja. Mesečni limit imaju samo rashodi.
         </p>
 
         <Ruler />
@@ -279,8 +279,8 @@ export default async function SettingsPage({
             ) : (
               <>
                 <p className="fine">
-                  Ostaju u istoriji meseca, ne primaju nove unose i nemaju aktivna ponavljanja.
-                  Limit se i ovde može ukloniti, da prag prestane da se javlja.
+                  Arhivirane kategorije ostaju uz ranije unose. Ovde možete i da uklonite njihov
+                  limit.
                 </p>
                 <div className="category-groups">
                   {[

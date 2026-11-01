@@ -404,8 +404,8 @@ export default async function MonthPage({
                               {row.automatic ? <span className="tag">ponavljanje</span> : null}
                             </span>
                             <span className="entry__meta">
+                              {row.note ? `${row.note} · ` : ""}
                               {row.personName}
-                              {row.note ? ` · ${row.note}` : ""}
                             </span>
                           </span>
                           <span className="entry__amount amount">

@@ -889,6 +889,7 @@ describe("buildUpcoming", () => {
     });
 
     expect(rows[0]?.state).toBe("uneto");
+    expect(rows[0]?.entryId).toBe("e1");
   });
 
   it("unos istog pravila iz drugog meseca ne gasi dospeće", () => {

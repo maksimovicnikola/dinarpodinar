@@ -24,6 +24,7 @@ import {
   RemoveMemberForm,
   RenameCategoryForm,
   RevokeInvitationForm,
+  DeleteRuleForm,
   RuleForm,
 } from "./forms";
 
@@ -463,6 +464,7 @@ export default async function SettingsPage({
                       </>
                     }
                   />
+                  <DeleteRuleForm householdId={householdId} ruleId={rule.id} />
                 </li>
               );
             })}

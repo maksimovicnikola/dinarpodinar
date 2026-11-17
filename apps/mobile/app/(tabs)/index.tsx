@@ -19,13 +19,24 @@ import { SignOutLink } from "../../components/sign-out";
 import { Amount, Button, Card, Chip, Chips, LimitBar, Muted, Notice, Screen, Tag, Title } from "../../components/ui";
 import { dayLabel, monthTitle, shiftMonth } from "../../lib/format";
 import { loadHousehold } from "../../lib/household";
+import { confirmOccurrence, undoOccurrence } from "../../lib/manage";
 import { toEntrySnapshot } from "../../lib/rows";
 import { supabase } from "../../lib/supabase";
 import { colors, space, type } from "../../lib/theme";
 
 type Bar = { id: string; name: string; spent: string; limit: string | null; width: number; state: LimitState; percent: number | null };
-type Due = { id: string; name: string; date: string; amount: string; settled: boolean };
+type Due = {
+  id: string;
+  name: string;
+  dueOn: string;
+  date: string;
+  amount: string;
+  settled: boolean;
+  entryId: string | null;
+  kind: "expense" | "income";
+};
 type Overview = {
+  householdId: string;
   householdName: string;
   people: Array<{ id: string; name: string }>;
   leftover: string;
@@ -45,6 +56,8 @@ export default function OverviewScreen() {
   const [empty, setEmpty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [owner, setOwner] = useState(false);
+  const [busyDue, setBusyDue] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const result = await loadHousehold();
@@ -72,7 +85,7 @@ export default function OverviewScreen() {
         .in("month_key", earlier === null ? [month] : [month, earlier]),
       supabase
         .from("recurring_rules")
-        .select("id, category_id, person_id, amount_minor, cadence, month_of_year, day_of_month")
+        .select("id, kind, category_id, person_id, amount_minor, cadence, month_of_year, day_of_month")
         .eq("household_id", household.householdId)
         .eq("active", true),
     ]);
@@ -105,27 +118,37 @@ export default function OverviewScreen() {
       }));
 
     const [year, monthNumber] = month.split("-").map(Number);
-    const settled = new Set(scoped.filter((entry) => monthKey(entry.occurredOn) === month).map((entry) => entry.ruleId));
+    const entryByRule = new Map(
+      scoped
+        .filter((entry) => monthKey(entry.occurredOn) === month && entry.ruleId)
+        .map((entry) => [entry.ruleId as string, entry.id]),
+    );
     const names = new Map(household.categories.map((category) => [category.id, category.name]));
-    const due = (rules.data ?? [])
+    const due: Due[] = (rules.data ?? [])
       .filter((rule) => recurrenceInMonth(rule.cadence === "yearly" ? "yearly" : "monthly", rule.month_of_year, monthNumber))
       .filter((rule) => !person || rule.person_id === person.id)
-      .map((rule) => {
+      .map((rule): Due => {
         const dueOn = occurrenceDate(year, monthNumber, rule.day_of_month);
+        const kind: Due["kind"] = rule.kind === "income" ? "income" : "expense";
         return {
           id: rule.id as string,
           name: names.get(rule.category_id) ?? "Kategorija",
           dueOn,
           date: dayLabel(dueOn),
           amount: money(rule.amount_minor),
-          settled: settled.has(rule.id),
+          settled: entryByRule.has(rule.id),
+          entryId: entryByRule.get(rule.id) ?? null,
+          kind,
         };
       })
       .sort((a, b) => (a.dueOn < b.dueOn ? -1 : 1));
 
     setEmpty(false);
+    setOwner(household.role === "owner");
     setMessage(null);
+    pingAlerts(household.householdId);
     setView({
+      householdId: household.householdId,
       householdName: household.name,
       people: household.people,
       leftover: `${summary.leftoverMinor > 0 ? "+" : ""}${money(summary.leftoverMinor)}`,
@@ -163,6 +186,19 @@ export default function OverviewScreen() {
     setRefreshing(true);
     await load();
     setRefreshing(false);
+  }
+
+  async function runDue(id: string, work: () => Promise<{ ok: boolean; message: string }>) {
+    if (busyDue) return;
+    setBusyDue(id);
+    setMessage(null);
+    try {
+      const result = await work();
+      if (!result.ok) setMessage(result.message);
+      if (result.ok) await load();
+    } finally {
+      setBusyDue(null);
+    }
   }
 
   const before = shiftMonth(month, -1);
@@ -270,7 +306,7 @@ export default function OverviewScreen() {
           <Card>
             <Title>Uskoro dospeva</Title>
             {view.due.length === 0 ? (
-              <Muted>Nema mesečnih ponavljanja.</Muted>
+              <Muted>Nema ponavljanja.</Muted>
             ) : (
               view.due.map((row) => (
                 <View key={row.id} style={styles.dueRow}>
@@ -280,6 +316,29 @@ export default function OverviewScreen() {
                       {row.settled ? <Tag tone="good">Uneto</Tag> : null}
                     </View>
                     <Muted>{row.date}</Muted>
+                    {row.settled ? (
+                      owner && row.entryId ? (
+                        <Button
+                          quiet
+                          disabled={busyDue !== null}
+                          onPress={() =>
+                            void runDue(row.id, () => undoOccurrence(view.householdId, row.entryId as string))
+                          }
+                        >
+                          Poništi unos
+                        </Button>
+                      ) : null
+                    ) : (
+                      <Button
+                        quiet
+                        disabled={busyDue !== null}
+                        onPress={() =>
+                          void runDue(row.id, () => confirmOccurrence(view.householdId, row.id, month))
+                        }
+                      >
+                        {busyDue === row.id ? "Unosim…" : row.kind === "income" ? "Primljeno" : "Plaćeno"}
+                      </Button>
+                    )}
                   </View>
                   <Amount>{row.amount}</Amount>
                 </View>
@@ -290,6 +349,24 @@ export default function OverviewScreen() {
       ) : null}
     </Screen>
   );
+}
+
+function pingAlerts(householdId: string) {
+  const web = process.env.EXPO_PUBLIC_WEB_URL;
+  if (!web) return;
+  void (async () => {
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) return;
+    await fetch(`${web}/api/alerts`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ householdId }),
+    }).catch(() => undefined);
+  })();
 }
 
 function StepButton({

@@ -6,6 +6,7 @@ export {
   MONTH_GENITIVE,
   monthKey,
   occurrenceDate,
+  occurrenceInMonth,
   recurrenceInMonth,
   recurrenceSummary,
   repeatSchedule,

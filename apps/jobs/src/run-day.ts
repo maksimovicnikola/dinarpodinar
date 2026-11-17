@@ -2,13 +2,11 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   limitThresholds,
   monthKey,
-  occurrenceDate,
-  recurrenceInMonth,
   summarizeMonth,
   todayInBelgrade,
   type RecurrenceCadence,
 } from "@finance/domain";
-import { dueActions } from "./decide";
+import { reminderOccurrences } from "./decide";
 
 type Admin = SupabaseClient;
 
@@ -78,58 +76,65 @@ export async function sendLimitAlerts(client: Admin, householdId: string, month:
   }
 }
 
-export async function runDay(now: Date) {
-  const client = admin();
-  const today = todayInBelgrade(now);
-  const rules = await client.from("recurring_rules").select("id, household_id, kind, amount_minor, category_id, person_id, note, day_of_month, month_of_year, cadence, remind_days, active");
+/**
+ * Jedan podsetnik po pravilu, prvi put kad neko uđe u prozor dospeća.
+ *
+ * Unos se ovde ne pravi. Plaćanje se beleži tek kad ga član potvrdi, jer
+ * zaboravljena rata ne sme sama da uđe u zbir.
+ */
+export async function sendDueReminders(client: Admin, householdId: string, today: string) {
+  const rules = await client
+    .from("recurring_rules")
+    .select("id, category_id, day_of_month, month_of_year, cadence, remind_days")
+    .eq("household_id", householdId)
+    .eq("active", true);
   if (rules.error) throw rules.error;
-  const households = new Set<string>();
-  const [year, monthNumber] = today.split("-").map(Number);
+
   for (const rule of rules.data ?? []) {
-    households.add(rule.household_id);
     const cadence: RecurrenceCadence = rule.cadence === "yearly" ? "yearly" : "monthly";
-    const monthOfYear = rule.month_of_year ?? null;
-    if (!recurrenceInMonth(cadence, monthOfYear, monthNumber)) continue;
-    const occurrence = occurrenceDate(year, monthNumber, rule.day_of_month);
-    const month = monthKey(occurrence);
-    const existing = await client.from("entries").select("id").eq("recurring_rule_id", rule.id).eq("month_key", month).maybeSingle();
-    if (existing.error) throw existing.error;
-    const sent = await client.from("sent_notifications").select("id").eq("household_id", rule.household_id).eq("dedupe_key", `reminder:${rule.id}:${month}`).maybeSingle();
-    if (sent.error) throw sent.error;
-    const actions = dueActions({
+    const occurrences = reminderOccurrences({
       today,
       dayOfMonth: rule.day_of_month,
       remindDays: rule.remind_days,
-      active: rule.active,
-      reminderSent: Boolean(sent.data),
-      entryExists: Boolean(existing.data),
       cadence,
-      monthOfYear,
+      monthOfYear: rule.month_of_year,
     });
-    if (actions.includes("insert")) {
-      const inserted = await client.from("entries").insert({
-        household_id: rule.household_id,
-        kind: rule.kind,
-        amount_minor: rule.amount_minor,
-        category_id: rule.category_id,
-        person_id: rule.person_id,
-        occurred_on: occurrence,
-        note: rule.note,
-        recurring_rule_id: rule.id,
-        created_by: rule.person_id,
-      });
-      if (inserted.error && inserted.error.code !== "23505") throw inserted.error;
-    }
-    if (actions.includes("remind")) {
-      const claimed = await claim(client, rule.household_id, `reminder:${rule.id}:${month}`);
-      if (claimed) {
-        const category = await client.from("categories").select("name").eq("id", rule.category_id).single();
-        if (category.error) throw category.error;
-        await pushToHousehold(client, rule.household_id, `Podsetnik: ${category.data?.name ?? "unos"} dospeva ${occurrence}.`);
-      }
+
+    for (const occurrence of occurrences) {
+      const month = monthKey(occurrence);
+      const existing = await client
+        .from("entries")
+        .select("id")
+        .eq("recurring_rule_id", rule.id)
+        .eq("month_key", month)
+        .maybeSingle();
+      if (existing.error) throw existing.error;
+      if (existing.data) continue;
+
+      const claimed = await claim(client, householdId, `reminder:${rule.id}:${month}`);
+      if (!claimed) continue;
+
+      const category = await client.from("categories").select("name").eq("id", rule.category_id).single();
+      if (category.error) throw category.error;
+      const name = category.data?.name ?? "unos";
+      const body =
+        occurrence < today
+          ? `Podsetnik: ${name} je dospeo ${occurrence}, a nije unet.`
+          : `Podsetnik: ${name} dospeva ${occurrence}.`;
+      await pushToHousehold(client, householdId, body);
+      break;
     }
   }
+}
+
+export async function runDay(now: Date) {
+  const client = admin();
+  const today = todayInBelgrade(now);
+  const rules = await client.from("recurring_rules").select("household_id");
+  if (rules.error) throw rules.error;
+  const households = new Set((rules.data ?? []).map((row) => row.household_id as string));
   for (const householdId of households) {
+    await sendDueReminders(client, householdId, today);
     await sendLimitAlerts(client, householdId, monthKey(today));
   }
 }

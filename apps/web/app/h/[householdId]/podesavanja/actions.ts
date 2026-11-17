@@ -571,6 +571,43 @@ export async function saveRuleAction(
   });
 }
 
+/**
+ * Brisanje pravila. Dosadašnji unosi ostaju, ali više nisu vezani za ponavljanje
+ * (`recurring_rule_id` postaje prazan). Buduća dospeća nestaju.
+ */
+export async function deleteRuleAction(
+  _previous: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  return runAsOwner(text(formData, "dom"), async ({ supabase, householdId }) => {
+    const ruleId = uuidParam(text(formData, "pravilo"));
+    if (ruleId === null) {
+      return settingsFailure(RULE_GONE);
+    }
+
+    if (!confirmedDelete(text(formData, "potvrda"))) {
+      return settingsFailure("Štiklirajte potvrdu da bi se ponavljanje obrisalo.");
+    }
+
+    const removed = await supabase
+      .from("recurring_rules")
+      .delete()
+      .eq("id", ruleId)
+      .eq("household_id", householdId)
+      .select("id");
+
+    if (removed.error) {
+      return settingsFailure(settingsErrorMessage(removed.error.message));
+    }
+
+    if (touched(removed.data) === 0) {
+      return settingsFailure(RULE_GONE);
+    }
+
+    return settingsDone("Ponavljanje je obrisano. Dosadašnji unosi ostaju u istoriji.");
+  });
+}
+
 // ----------------------------------------------------------------
 // Unosi
 // ----------------------------------------------------------------

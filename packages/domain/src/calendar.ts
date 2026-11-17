@@ -84,6 +84,24 @@ export const MONTH_GENITIVE = [
   "decembra",
 ] as const;
 
+/**
+ * Datum dospeća u posmatranom mesecu (`YYYY-MM`), ili `null` ako pravilo
+ * tog meseca nema dospeće. Dan 31 i 29. februar skraćuje `occurrenceDate`.
+ */
+export function occurrenceInMonth(
+  month: string,
+  dayOfMonth: number,
+  cadence: RecurrenceCadence,
+  monthOfYear: number | null,
+): string | null {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(month);
+  if (match == null) return null;
+  const year = Number(match[1]);
+  const monthNumber = Number(match[2]);
+  if (!recurrenceInMonth(cadence, monthOfYear, monthNumber)) return null;
+  return occurrenceDate(year, monthNumber, dayOfMonth);
+}
+
 /** Mesečno pravilo važi svakog meseca. Godišnje samo u svom mesecu (1–12). */
 export function recurrenceInMonth(
   cadence: RecurrenceCadence,

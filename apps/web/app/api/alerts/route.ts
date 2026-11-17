@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { monthKey, todayInBelgrade } from "@finance/domain";
-import { sendLimitAlerts } from "jobs/run";
+import { sendDueReminders, sendLimitAlerts } from "jobs/run";
 
 import { supabaseEnv } from "@/lib/supabase/env";
 import { createWritableServerSupabase } from "@/lib/supabase/server";
@@ -42,6 +42,8 @@ export async function POST(request: Request) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error("Nedostaje NEXT_PUBLIC_SUPABASE_URL ili SUPABASE_SERVICE_ROLE_KEY");
   const admin = createClient(url, key, { auth: { persistSession: false } });
-  await sendLimitAlerts(admin, body.householdId, monthKey(todayInBelgrade(new Date())));
+  const today = todayInBelgrade(new Date());
+  await sendDueReminders(admin, body.householdId, today);
+  await sendLimitAlerts(admin, body.householdId, monthKey(today));
   return NextResponse.json({ ok: true });
 }

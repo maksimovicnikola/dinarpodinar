@@ -333,6 +333,8 @@ export type UpcomingRow = {
   remindDate: string;
   state: UpcomingState;
   label: string;
+  /** Unos koji je potvrda ovog dospeća napravila, ili `null` dok nije uneto. */
+  entryId: string | null;
 };
 
 const STATE_LABELS: Record<UpcomingState, string> = {
@@ -363,10 +365,10 @@ export function buildUpcoming(input: {
   const { year, monthNumber } = monthParts(input.month);
   const categoryById = new Map(input.categories.map((category) => [category.id, category.name]));
   const personById = new Map(input.people.map((person) => [person.id, person.name]));
-  const settled = new Set(
+  const settled = new Map(
     input.entries
       .filter((entry) => entry.recurringRuleId !== null && entry.occurredOn.slice(0, 7) === input.month)
-      .map((entry) => entry.recurringRuleId as string),
+      .map((entry) => [entry.recurringRuleId as string, entry.id]),
   );
   const personId = input.personId?.trim();
 
@@ -376,7 +378,8 @@ export function buildUpcoming(input: {
     .map((rule) => {
       const dueOn = occurrenceDate(year, monthNumber, rule.dayOfMonth);
       const remindOn = addCalendarDays(dueOn, -rule.remindDays);
-      const state: UpcomingState = settled.has(rule.id)
+      const entryId = settled.get(rule.id) ?? null;
+      const state: UpcomingState = entryId !== null
         ? "uneto"
         : dueOn === input.today
           ? "danas"
@@ -397,6 +400,7 @@ export function buildUpcoming(input: {
         remindDate: formatDate(remindOn),
         state,
         label: STATE_LABELS[state],
+        entryId,
       };
     })
     .sort((a, b) => {

@@ -350,6 +350,10 @@ export function entryErrorMessage(raw: string | null | undefined): string {
     return "Izabrana osoba više nije član domaćinstva. Izaberite drugu.";
   }
 
+  if (value.includes("samo vlasnik menja unos")) {
+    return "Unos poništava samo vlasnik domaćinstva.";
+  }
+
   if (value.includes("entries_one_rule_per_month") || value.includes("duplicate key")) {
     return "Ovaj mesec već ima unos iz tog ponavljanja.";
   }

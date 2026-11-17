@@ -32,6 +32,7 @@ import {
   removeMemberAction,
   renameCategoryAction,
   revokeInvitationAction,
+  deleteRuleAction,
   saveLimitAction,
   saveRuleAction,
 } from "./actions";
@@ -510,6 +511,53 @@ function RuleFields(server: RuleFieldValues) {
         </span>
       </div>
     </>
+  );
+}
+
+export function DeleteRuleForm({
+  householdId,
+  ruleId,
+}: {
+  householdId: string;
+  ruleId: string;
+}) {
+  const [state, action] = useActionState(deleteRuleAction, emptySettings);
+  const [confirmed, setConfirmed] = useState(false);
+
+  return (
+    <form className="stack stack--tight" action={action}>
+      <HouseholdField householdId={householdId} />
+      <input type="hidden" name="pravilo" value={ruleId} />
+
+      <div className="check">
+        <input
+          id={`brisi-pravilo-${ruleId}`}
+          className="check__box"
+          name="potvrda"
+          type="checkbox"
+          value="da"
+          checked={confirmed}
+          onChange={(event) => setConfirmed(event.target.checked)}
+          aria-describedby={`brisi-pravilo-${ruleId}-hint`}
+        />
+        <span className="check__text">
+          <label className="check__label" htmlFor={`brisi-pravilo-${ruleId}`}>
+            Razumem da se ponavljanje briše
+          </label>
+          <span className="field__hint" id={`brisi-pravilo-${ruleId}-hint`}>
+            Buduća dospeća nestaju. Unosi koji su već potvrđeni ostaju u istoriji.
+          </span>
+        </span>
+      </div>
+
+      <Outcome state={state} />
+
+      <div className="row">
+        <SubmitButton quiet pendingLabel="Brišem…" disabled={!confirmed}>
+          Obriši ponavljanje
+        </SubmitButton>
+      </div>
+    </form>
   );
 }
 

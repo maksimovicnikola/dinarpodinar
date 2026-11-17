@@ -6,6 +6,7 @@ import {
   clampDayOfMonth,
   monthKey,
   occurrenceDate,
+  occurrenceInMonth,
   recurrenceInMonth,
   recurrenceSummary,
   repeatSchedule,
@@ -71,6 +72,14 @@ describe("calendar", () => {
     expect(recurrenceInMonth("yearly", 1, 1)).toBe(true);
     expect(recurrenceInMonth("yearly", 1, 6)).toBe(false);
     expect(recurrenceInMonth("yearly", null, 1)).toBe(false);
+  });
+
+  it("dospeće u posmatranom mesecu postoji samo kad pravilo tu važi", () => {
+    expect(occurrenceInMonth("2026-06", 15, "monthly", null)).toBe("2026-06-15");
+    expect(occurrenceInMonth("2027-01", 15, "yearly", 1)).toBe("2027-01-15");
+    expect(occurrenceInMonth("2027-06", 15, "yearly", 1)).toBeNull();
+    expect(occurrenceInMonth("2027-02", 29, "yearly", 2)).toBe("2027-02-28");
+    expect(occurrenceInMonth("2026-6", 15, "monthly", null)).toBeNull();
   });
 
   it("raspored godišnjeg pravila uzima mesec i dan, a 29. februar kaže 28", () => {

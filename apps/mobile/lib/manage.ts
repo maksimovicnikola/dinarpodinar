@@ -1,4 +1,4 @@
-import { assertDayOfMonth, assertRemindDays } from "@finance/domain";
+import { assertDayOfMonth, assertRemindDays, occurrenceInMonth, type RecurrenceCadence } from "@finance/domain";
 
 import { majorToMinor } from "./rows";
 import { supabase } from "./supabase";
@@ -34,6 +34,9 @@ export function explain(raw: string | null | undefined): string {
   }
   if (value.includes("arhivirana kategorija")) {
     return "Kategorija je arhivirana, pa ponavljanje ne može da bude aktivno.";
+  }
+  if (value.includes("samo vlasnik menja unos")) {
+    return "Unos poništava samo vlasnik domaćinstva.";
   }
   if (value.includes("osoba nije član")) {
     return "Osoba iz ponavljanja više nije član, pa ponavljanje ne može da se uključi.";
@@ -216,6 +219,62 @@ export async function saveRule(
     ok: true,
     message: input.active ? `Ponavljanje je sačuvano i radi ${input.day}. u mesecu.` : "Ponavljanje je sačuvano i ugašeno.",
   };
+}
+
+export async function deleteRule(householdId: string, ruleId: string): Promise<Outcome> {
+  const removed = await supabase
+    .from("recurring_rules")
+    .delete()
+    .eq("id", ruleId)
+    .eq("household_id", householdId)
+    .select("id");
+  if (removed.error) return fail(removed.error);
+  if ((removed.data ?? []).length === 0) return { ok: false, message: "Ponavljanje više nije tu." };
+  return { ok: true, message: "Ponavljanje je obrisano. Dosadašnji unosi ostaju u istoriji." };
+}
+
+export async function confirmOccurrence(householdId: string, ruleId: string, month: string): Promise<Outcome> {
+  const rule = await supabase
+    .from("recurring_rules")
+    .select("kind, amount_minor, category_id, person_id, note, day_of_month, cadence, month_of_year, active")
+    .eq("id", ruleId)
+    .eq("household_id", householdId)
+    .maybeSingle();
+  if (rule.error) return fail(rule.error);
+  if (!rule.data?.active) return { ok: false, message: "Ponavljanje više nije uključeno." };
+  const cadence: RecurrenceCadence = rule.data.cadence === "yearly" ? "yearly" : "monthly";
+  const occurredOn = occurrenceInMonth(month, rule.data.day_of_month, cadence, rule.data.month_of_year);
+  if (occurredOn === null) return { ok: false, message: "Ovo ponavljanje nema dospeće u ovom mesecu." };
+  const inserted = await supabase.from("entries").insert({
+    household_id: householdId,
+    kind: rule.data.kind,
+    amount_minor: rule.data.amount_minor,
+    category_id: rule.data.category_id,
+    person_id: rule.data.person_id,
+    occurred_on: occurredOn,
+    note: rule.data.note ?? "",
+    recurring_rule_id: ruleId,
+  });
+  if (inserted.error) {
+    const message = inserted.error.message ?? "";
+    if (inserted.error.code === "23505" || message.includes("entries_one_rule_per_month")) {
+      return { ok: true, message: "Ovo dospeće je već uneto." };
+    }
+    return fail(inserted.error);
+  }
+  return { ok: true, message: "Dospeće je uneto u spisak." };
+}
+
+export async function undoOccurrence(householdId: string, entryId: string): Promise<Outcome> {
+  const removed = await supabase
+    .from("entries")
+    .delete()
+    .eq("id", entryId)
+    .eq("household_id", householdId)
+    .select("id");
+  if (removed.error) return fail(removed.error);
+  if ((removed.data ?? []).length === 0) return { ok: false, message: "Ovaj unos više nije tu." };
+  return { ok: true, message: "Unos je poništen. Dospeće je opet na spisku." };
 }
 
 export async function createHousehold(name: string, currency: string): Promise<Outcome & { id?: string }> {

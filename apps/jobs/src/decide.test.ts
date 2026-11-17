@@ -1,126 +1,67 @@
 import { describe, expect, it } from "vitest";
-import { dueActions, occurrenceThisMonth } from "./decide";
+import { occurrenceThisMonth, reminderOccurrences } from "./decide";
 
-describe("dueActions", () => {
+describe("reminderOccurrences", () => {
   it("dan 31 u februaru 2026 dospeva 28", () => {
     expect(occurrenceThisMonth("2026-02-01", 31)).toBe("2026-02-28");
   });
 
-  it("šalje podsetnik na dan podsetnika i unos na dan dospeća", () => {
-    expect(dueActions({
-      today: "2026-03-30",
-      dayOfMonth: 31,
-      remindDays: 1,
-      active: true,
-      reminderSent: false,
-      entryExists: false,
-    })).toEqual(["remind"]);
-    expect(dueActions({
-      today: "2026-03-31",
-      dayOfMonth: 31,
-      remindDays: 1,
-      active: true,
-      reminderSent: true,
-      entryExists: false,
-    })).toEqual(["insert"]);
+  it("podsetnik kreće pre dospeća i traje do kraja tog meseca", () => {
+    expect(reminderOccurrences({ today: "2026-03-30", dayOfMonth: 31, remindDays: 1 })).toEqual([
+      "2026-03-31",
+    ]);
+    expect(reminderOccurrences({ today: "2026-03-31", dayOfMonth: 31, remindDays: 1 })).toEqual([
+      "2026-03-31",
+    ]);
+    expect(reminderOccurrences({ today: "2026-04-01", dayOfMonth: 31, remindDays: 1 })).toEqual([]);
   });
 
-  it("ponovljeni posao ne šalje drugi podsetnik i ne pravi drugi unos", () => {
-    expect(dueActions({
-      today: "2026-03-31",
-      dayOfMonth: 31,
-      remindDays: 1,
-      active: true,
-      reminderSent: true,
-      entryExists: true,
-    })).toEqual([]);
+  it("neplaćeno dospeće ide ispred sledećeg podsetnika", () => {
+    expect(reminderOccurrences({ today: "2026-03-30", dayOfMonth: 5, remindDays: 7 })).toEqual([
+      "2026-03-05",
+      "2026-04-05",
+    ]);
   });
 
-  it("ugašeno pravilo ne radi ništa", () => {
-    expect(dueActions({
-      today: "2026-03-31",
-      dayOfMonth: 31,
-      remindDays: 1,
-      active: false,
-      reminderSent: false,
-      entryExists: false,
-    })).toEqual([]);
-  });
-
-  it("godišnje pravilo dospeva samo u svom mesecu", () => {
-    expect(dueActions({
-      today: "2027-06-15",
-      dayOfMonth: 15,
-      remindDays: 1,
-      active: true,
-      reminderSent: false,
-      entryExists: false,
-      cadence: "yearly",
-      monthOfYear: 1,
-    })).toEqual([]);
-    expect(dueActions({
-      today: "2027-01-14",
-      dayOfMonth: 15,
-      remindDays: 1,
-      active: true,
-      reminderSent: false,
-      entryExists: false,
-      cadence: "yearly",
-      monthOfYear: 1,
-    })).toEqual(["remind"]);
-    expect(dueActions({
-      today: "2027-01-15",
-      dayOfMonth: 15,
-      remindDays: 1,
-      active: true,
-      reminderSent: true,
-      entryExists: false,
-      cadence: "yearly",
-      monthOfYear: 1,
-    })).toEqual(["insert"]);
+  it("godišnje pravilo se javlja samo oko svog meseca", () => {
+    expect(
+      reminderOccurrences({
+        today: "2027-06-15",
+        dayOfMonth: 15,
+        remindDays: 1,
+        cadence: "yearly",
+        monthOfYear: 1,
+      }),
+    ).toEqual([]);
+    expect(
+      reminderOccurrences({
+        today: "2026-12-30",
+        dayOfMonth: 5,
+        remindDays: 7,
+        cadence: "yearly",
+        monthOfYear: 1,
+      }),
+    ).toEqual(["2027-01-05"]);
+    expect(
+      reminderOccurrences({
+        today: "2027-01-20",
+        dayOfMonth: 15,
+        remindDays: 1,
+        cadence: "yearly",
+        monthOfYear: 1,
+      }),
+    ).toEqual(["2027-01-15"]);
   });
 
   it("29. februar u neprestupnoj godini dospeva 28", () => {
-    expect(dueActions({
-      today: "2027-02-27",
-      dayOfMonth: 29,
-      remindDays: 1,
-      active: true,
-      reminderSent: false,
-      entryExists: false,
-      cadence: "yearly",
-      monthOfYear: 2,
-    })).toEqual(["remind"]);
-    expect(dueActions({
-      today: "2027-02-28",
-      dayOfMonth: 29,
-      remindDays: 1,
-      active: true,
-      reminderSent: true,
-      entryExists: false,
-      cadence: "yearly",
-      monthOfYear: 2,
-    })).toEqual(["insert"]);
-    expect(dueActions({
-      today: "2024-02-29",
-      dayOfMonth: 29,
-      remindDays: 1,
-      active: true,
-      reminderSent: true,
-      entryExists: false,
-      cadence: "yearly",
-      monthOfYear: 2,
-    })).toEqual(["insert"]);
-  });
-
-  it("kasni unos u istom mesecu i dalje ubaci jednom", () => {
-    expect(dueActions({
-      today: "2026-03-31",
-      dayOfMonth: 30,
-      remindDays: 1,
-      active: true,
-      reminderSent: true,
-      entryExists: false,
-    })).toEqual(["insert"]);
+    expect(
+      reminderOccurrences({
+        today: "2027-02-28",
+        dayOfMonth: 29,
+        remindDays: 1,
+        cadence: "yearly",
+        monthOfYear: 2,
+      }),
+    ).toEqual(["2027-02-28"]);
   });
 });

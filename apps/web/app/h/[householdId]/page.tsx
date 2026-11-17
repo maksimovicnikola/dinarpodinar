@@ -20,6 +20,8 @@ import {
 import { createServerComponentSupabase } from "@/lib/supabase/server";
 
 import { LiveEntries } from "./live";
+import { OccurrenceActions } from "./occurrence";
+import { VisitAlerts } from "./visit-alerts";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -184,6 +186,7 @@ export default async function MonthPage({
   return (
     <>
       <LiveEntries householdId={householdId} />
+      <VisitAlerts householdId={householdId} />
 
       <header className="pagehead">
         <div className="pagehead__title">
@@ -334,7 +337,7 @@ export default async function MonthPage({
             </div>
 
             {upcoming.length === 0 ? (
-              <p className="empty">Nema mesečnih ponavljanja.</p>
+              <p className="empty">Nema ponavljanja.</p>
             ) : (
               <ul className="ledger">
                 {upcoming.map((row) => (
@@ -350,6 +353,14 @@ export default async function MonthPage({
                       <span className="fine">
                         {row.personName} · podsetnik {row.remindDate}
                       </span>
+                      <OccurrenceActions
+                        householdId={householdId}
+                        ruleId={row.id}
+                        month={month}
+                        kind={row.kind}
+                        entryId={row.entryId}
+                        owner={owner}
+                      />
                     </span>
                     <span className="ledger__amount amount">{row.amount}</span>
                   </li>

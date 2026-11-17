@@ -11,28 +11,45 @@ export function occurrenceThisMonth(today: string, dayOfMonth: number): string {
   return occurrenceDate(year, month, dayOfMonth);
 }
 
-export function dueActions(input: {
+function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
+  const index = year * 12 + (month - 1) + delta;
+  return { year: Math.floor(index / 12), month: (index % 12) + 1 };
+}
+
+/**
+ * Dospeća čiji je prozor podsetnika otvoren danas.
+ *
+ * Prozor traje od dana podsetnika do kraja meseca dospeća. Dospeo, a neunet
+ * unos ide ispred onog koji tek stiže. Pozivalac šalje najviše jedan podsetnik
+ * po pravilu i preskače ono što je već uneto ili već javljeno.
+ */
+export function reminderOccurrences(input: {
   today: string;
   dayOfMonth: number;
   remindDays: number;
-  active: boolean;
-  reminderSent: boolean;
-  entryExists: boolean;
   cadence?: RecurrenceCadence;
   monthOfYear?: number | null;
-}): Array<"remind" | "insert"> {
-  if (!input.active) return [];
-  const [year, month] = input.today.split("-").map(Number);
+}): string[] {
   const cadence = input.cadence ?? "monthly";
-  if (!recurrenceInMonth(cadence, input.monthOfYear ?? null, month)) return [];
-  const occurrence = occurrenceDate(year, month, input.dayOfMonth);
-  const reminder = addCalendarDays(occurrence, -input.remindDays);
-  const actions: Array<"remind" | "insert"> = [];
-  if (!input.reminderSent && input.today >= reminder && input.today < occurrence) {
-    actions.push("remind");
+  const [year, month] = input.today.split("-").map(Number);
+  if (!Number.isInteger(year) || !Number.isInteger(month)) return [];
+
+  const found: string[] = [];
+  for (const delta of [-1, 0, 1]) {
+    const when = shiftMonth(year, month, delta);
+    if (!recurrenceInMonth(cadence, input.monthOfYear ?? null, when.month)) continue;
+    const occurrence = occurrenceDate(when.year, when.month, input.dayOfMonth);
+    const reminder = addCalendarDays(occurrence, -input.remindDays);
+    const open =
+      input.today >= reminder &&
+      (monthKey(input.today) === monthKey(occurrence) || input.today < occurrence);
+    if (open) found.push(occurrence);
   }
-  if (!input.entryExists && input.today >= occurrence && monthKey(input.today) === monthKey(occurrence)) {
-    actions.push("insert");
-  }
-  return actions;
+
+  return found.sort((a, b) => {
+    const aOver = a <= input.today ? 0 : 1;
+    const bOver = b <= input.today ? 0 : 1;
+    if (aOver !== bOver) return aOver - bOver;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
 }

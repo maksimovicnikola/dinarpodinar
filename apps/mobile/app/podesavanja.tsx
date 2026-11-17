@@ -30,6 +30,7 @@ import {
   renameCategory,
   revokeInvitation,
   saveLimit,
+  deleteRule,
   saveRule,
   type Outcome,
 } from "../lib/manage";
@@ -466,6 +467,7 @@ function RuleEditor({
   const [day, setDay] = useState(rule.day);
   const [remind, setRemind] = useState(rule.remind);
   const [active, setActive] = useState(rule.active);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
     <View style={styles.block}>
@@ -513,6 +515,18 @@ function RuleEditor({
             onPress={() => void onRun(() => saveRule(householdId, rule.id, { amount, day, remind, active }))}
           >
             Sačuvaj ponavljanje
+          </Button>
+          <View style={styles.row}>
+            <Text style={styles.name}>Obriši ponavljanje</Text>
+            <Switch value={confirmDelete} onValueChange={setConfirmDelete} trackColor={{ true: colors.over }} />
+          </View>
+          <Muted>Buduća dospeća nestaju. Već uneti iznosi ostaju u istoriji.</Muted>
+          <Button
+            quiet
+            disabled={busy || !confirmDelete}
+            onPress={() => void onRun(() => deleteRule(householdId, rule.id))}
+          >
+            Obriši ponavljanje
           </Button>
         </>
       ) : null}

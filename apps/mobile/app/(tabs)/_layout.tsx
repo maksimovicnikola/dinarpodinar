@@ -3,6 +3,7 @@ import { Tabs, useRouter } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { DueReminder } from "../../components/due-reminder";
 import { colors } from "../../lib/theme";
 
 export default function TabsLayout() {
@@ -35,6 +36,7 @@ export default function TabsLayout() {
           }}
         />
       </Tabs>
+      <DueReminder />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Novi unos"

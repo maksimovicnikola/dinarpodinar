@@ -140,3 +140,80 @@ export function recurrenceSummary(input: {
   }
   return `Svakog meseca, ${input.dayOfMonth}. Učestalost se ne menja.`;
 }
+
+function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
+  const index = year * 12 + (month - 1) + delta;
+  return { year: Math.floor(index / 12), month: (index % 12) + 1 };
+}
+
+/**
+ * Dospeća čiji je prozor podsetnika otvoren danas.
+ *
+ * Prozor traje od dana podsetnika do kraja meseca dospeća. Dospeo, a neunet
+ * unos ide ispred onog koji tek stiže.
+ */
+export function reminderOccurrences(input: {
+  today: string;
+  dayOfMonth: number;
+  remindDays: number;
+  cadence?: RecurrenceCadence;
+  monthOfYear?: number | null;
+}): string[] {
+  const cadence = input.cadence ?? "monthly";
+  const [year, month] = input.today.split("-").map(Number);
+  if (!Number.isInteger(year) || !Number.isInteger(month)) return [];
+
+  const found: string[] = [];
+  for (const delta of [-1, 0, 1]) {
+    const when = shiftMonth(year, month, delta);
+    if (!recurrenceInMonth(cadence, input.monthOfYear ?? null, when.month)) continue;
+    const occurrence = occurrenceDate(when.year, when.month, input.dayOfMonth);
+    const reminder = addCalendarDays(occurrence, -input.remindDays);
+    const open =
+      input.today >= reminder &&
+      (monthKey(input.today) === monthKey(occurrence) || input.today < occurrence);
+    if (open) found.push(occurrence);
+  }
+
+  return found.sort((a, b) => {
+    const aOver = a <= input.today ? 0 : 1;
+    const bOver = b <= input.today ? 0 : 1;
+    if (aOver !== bOver) return aOver - bOver;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+}
+
+/** Otvorena dospeća za koja još nema unosa. Ključ u `settled` je `pravilo:YYYY-MM`. */
+export function unpaidReminders(
+  today: string,
+  rules: readonly {
+    id: string;
+    dayOfMonth: number;
+    remindDays: number;
+    cadence?: RecurrenceCadence;
+    monthOfYear?: number | null;
+  }[],
+  settled: ReadonlySet<string>,
+): { ruleId: string; occurrence: string; month: string }[] {
+  const rows: { ruleId: string; occurrence: string; month: string }[] = [];
+  for (const rule of rules) {
+    for (const occurrence of reminderOccurrences({
+      today,
+      dayOfMonth: rule.dayOfMonth,
+      remindDays: rule.remindDays,
+      cadence: rule.cadence,
+      monthOfYear: rule.monthOfYear,
+    })) {
+      const month = monthKey(occurrence);
+      if (settled.has(`${rule.id}:${month}`)) continue;
+      rows.push({ ruleId: rule.id, occurrence, month });
+    }
+  }
+  return rows.sort((a, b) => {
+    const aOver = a.occurrence <= today ? 0 : 1;
+    const bOver = b.occurrence <= today ? 0 : 1;
+    if (aOver !== bOver) return aOver - bOver;
+    if (a.occurrence !== b.occurrence) return a.occurrence < b.occurrence ? -1 : 1;
+    return a.ruleId.localeCompare(b.ruleId);
+  });
+}

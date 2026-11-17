@@ -793,6 +793,36 @@ textarea.input {
   justify-content: flex-end;
 }
 
+.dialog--due {
+  width: min(36rem, calc(100vw - 2rem));
+}
+
+.due-list {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+}
+
+.due-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-block: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.due-list li .fine {
+  display: block;
+}
+
+.due-list__side {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
 .button--small {
   min-height: 2.25rem;
   padding-inline: 0.875rem;

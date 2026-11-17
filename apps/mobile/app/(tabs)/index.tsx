@@ -12,7 +12,7 @@ import {
 } from "@finance/domain";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 
 import { SignOutLink } from "../../components/sign-out";
@@ -20,6 +20,7 @@ import { Amount, Button, Card, Chip, Chips, LimitBar, Muted, Notice, Screen, Tag
 import { dayLabel, monthTitle, shiftMonth } from "../../lib/format";
 import { loadHousehold } from "../../lib/household";
 import { confirmOccurrence, undoOccurrence } from "../../lib/manage";
+import { onEntriesChanged } from "../../lib/refresh";
 import { toEntrySnapshot } from "../../lib/rows";
 import { supabase } from "../../lib/supabase";
 import { colors, space, type } from "../../lib/theme";
@@ -181,6 +182,8 @@ export default function OverviewScreen() {
       void load();
     }, [load]),
   );
+
+  useEffect(() => onEntriesChanged(() => void load()), [load]);
 
   async function refresh() {
     setRefreshing(true);

@@ -9,8 +9,10 @@ import {
   occurrenceInMonth,
   recurrenceInMonth,
   recurrenceSummary,
+  reminderOccurrences,
   repeatSchedule,
   todayInBelgrade,
+  unpaidReminders,
 } from "../src/calendar";
 
 describe("calendar", () => {
@@ -105,6 +107,24 @@ describe("calendar", () => {
   it("occurrenceDate odbija nevažeći mesec", () => {
     expect(() => occurrenceDate(2026, 0, 15)).toThrow(/Mesec/);
     expect(() => occurrenceDate(2026, 13, 15)).toThrow(/Mesec/);
+  });
+
+  it("neplaćeno dospeće ostaje u prozoru, uneto nestaje", () => {
+    expect(reminderOccurrences({ today: "2026-03-17", dayOfMonth: 17, remindDays: 1 })).toEqual(["2026-03-17"]);
+    expect(
+      unpaidReminders(
+        "2026-03-17",
+        [{ id: "kirija", dayOfMonth: 17, remindDays: 1 }],
+        new Set(["kirija:2026-03"]),
+      ),
+    ).toEqual([]);
+    expect(
+      unpaidReminders(
+        "2026-03-17",
+        [{ id: "kirija", dayOfMonth: 17, remindDays: 1 }],
+        new Set(),
+      ),
+    ).toEqual([{ ruleId: "kirija", occurrence: "2026-03-17", month: "2026-03" }]);
   });
 
   it("podsetnik prima 1 do 7", () => {

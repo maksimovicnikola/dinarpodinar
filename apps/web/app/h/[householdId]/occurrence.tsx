@@ -9,6 +9,49 @@ import { entryErrorMessage } from "@/lib/entry-form";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 
 /**
+ * Potvrda uplate pravi unos. `null` znači da je unos upisan ili da je već postojao.
+ * Poruka je razlog zašto nije.
+ */
+export async function confirmOccurrencePayment(
+  householdId: string,
+  ruleId: string,
+  month: string,
+): Promise<string | null> {
+  try {
+    const supabase = createBrowserSupabase();
+    const rule = await supabase
+      .from("recurring_rules")
+      .select("kind, amount_minor, category_id, person_id, note, day_of_month, cadence, month_of_year, active")
+      .eq("id", ruleId)
+      .eq("household_id", householdId)
+      .maybeSingle();
+    if (rule.error) return entryErrorMessage(rule.error.message);
+    if (!rule.data?.active) return "Ponavljanje više nije uključeno.";
+    const cadence: RecurrenceCadence = rule.data.cadence === "yearly" ? "yearly" : "monthly";
+    const occurredOn = occurrenceInMonth(month, rule.data.day_of_month, cadence, rule.data.month_of_year);
+    if (occurredOn === null) return "Ovo ponavljanje nema dospeće u ovom mesecu.";
+    const inserted = await supabase.from("entries").insert({
+      household_id: householdId,
+      kind: rule.data.kind,
+      amount_minor: rule.data.amount_minor,
+      category_id: rule.data.category_id,
+      person_id: rule.data.person_id,
+      occurred_on: occurredOn,
+      note: rule.data.note ?? "",
+      recurring_rule_id: ruleId,
+    });
+    if (inserted.error) {
+      const message = inserted.error.message ?? "";
+      if (inserted.error.code === "23505" || message.includes("entries_one_rule_per_month")) return null;
+      return entryErrorMessage(message);
+    }
+    return null;
+  } catch (caught) {
+    return entryErrorMessage(caught instanceof Error ? caught.message : "");
+  }
+}
+
+/**
  * Potvrda uplate pravi unos. Poništavanje briše taj unos i vraća dospeće.
  * Pravilo ostaje.
  */
@@ -35,55 +78,10 @@ export function OccurrenceActions({
     if (pending) return;
     setPending(true);
     setError(null);
-    try {
-      const supabase = createBrowserSupabase();
-      const rule = await supabase
-        .from("recurring_rules")
-        .select("kind, amount_minor, category_id, person_id, note, day_of_month, cadence, month_of_year, active")
-        .eq("id", ruleId)
-        .eq("household_id", householdId)
-        .maybeSingle();
-      if (rule.error) throw rule.error;
-      if (!rule.data?.active) {
-        setError("Ponavljanje više nije uključeno.");
-        return;
-      }
-      const cadence: RecurrenceCadence = rule.data.cadence === "yearly" ? "yearly" : "monthly";
-      const occurredOn = occurrenceInMonth(
-        month,
-        rule.data.day_of_month,
-        cadence,
-        rule.data.month_of_year,
-      );
-      if (occurredOn === null) {
-        setError("Ovo ponavljanje nema dospeće u ovom mesecu.");
-        return;
-      }
-      const inserted = await supabase.from("entries").insert({
-        household_id: householdId,
-        kind: rule.data.kind,
-        amount_minor: rule.data.amount_minor,
-        category_id: rule.data.category_id,
-        person_id: rule.data.person_id,
-        occurred_on: occurredOn,
-        note: rule.data.note ?? "",
-        recurring_rule_id: ruleId,
-      });
-      if (inserted.error) {
-        const message = inserted.error.message ?? "";
-        if (inserted.error.code === "23505" || message.includes("entries_one_rule_per_month")) {
-          router.refresh();
-          return;
-        }
-        setError(entryErrorMessage(message));
-        return;
-      }
-      router.refresh();
-    } catch (caught) {
-      setError(entryErrorMessage(caught instanceof Error ? caught.message : ""));
-    } finally {
-      setPending(false);
-    }
+    const message = await confirmOccurrencePayment(householdId, ruleId, month);
+    if (message) setError(message);
+    else router.refresh();
+    setPending(false);
   }
 
   async function undo() {

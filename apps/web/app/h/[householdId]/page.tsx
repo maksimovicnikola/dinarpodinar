@@ -80,7 +80,7 @@ export default async function MonthPage({
       .eq("household_id", householdId),
     supabase
       .from("recurring_rules")
-      .select("id, kind, amount_minor, category_id, person_id, note, day_of_month, remind_days")
+      .select("id, kind, amount_minor, category_id, person_id, note, cadence, month_of_year, day_of_month, remind_days")
       .eq("household_id", householdId)
       .eq("active", true),
   ]);

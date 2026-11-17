@@ -121,6 +121,8 @@ type RuleArgs = {
   p_day_of_month: number;
   p_remind_days: number;
   p_request_id: string | null;
+  p_cadence: string;
+  p_month_of_year: number | null;
 };
 
 let owner: TestUser;
@@ -170,6 +172,8 @@ function args(overrides: Partial<RuleArgs> = {}): RuleArgs {
     p_day_of_month: 5,
     p_remind_days: 3,
     p_request_id: randomUUID(),
+    p_cadence: "monthly",
+    p_month_of_year: null,
     ...overrides,
   };
 }
@@ -218,7 +222,7 @@ describe("član pravi ponavljanje", () => {
 
     const rule = await admin
       .from("recurring_rules")
-      .select("id, household_id, kind, amount_minor, category_id, person_id, note, day_of_month, remind_days, active")
+      .select("id, household_id, kind, amount_minor, category_id, person_id, note, day_of_month, remind_days, cadence, month_of_year, active")
       .eq("id", entry.data!.recurring_rule_id as string)
       .single();
     expect(rule.error).toBeNull();
@@ -231,6 +235,8 @@ describe("član pravi ponavljanje", () => {
       note: "struja",
       day_of_month: 5,
       remind_days: 3,
+      cadence: "monthly",
+      month_of_year: null,
       active: true,
     });
   });
@@ -564,6 +570,51 @@ describe("pad unosa poništava i pravilo", () => {
     );
     expect(failed.error).not.toBeNull();
     expect(failed.error?.message).toMatch(/Osoba nije član/);
+    expect(await counts(householdId)).toEqual(before);
+  });
+
+  it("godišnje pravilo pamti mesec, a učestalost se posle ne menja", async () => {
+    const created = await client(member.token).rpc(
+      "create_entry_with_rule",
+      args({
+        p_occurred_on: "2027-01-15",
+        p_day_of_month: 15,
+        p_cadence: "yearly",
+        p_month_of_year: 1,
+      }),
+    );
+    expect(created.error).toBeNull();
+
+    const entry = await admin.from("entries").select("recurring_rule_id").eq("id", created.data as string).single();
+    expect(entry.error).toBeNull();
+    const ruleId = entry.data?.recurring_rule_id as string;
+
+    const rule = await admin
+      .from("recurring_rules")
+      .select("cadence, month_of_year, day_of_month")
+      .eq("id", ruleId)
+      .single();
+    expect(rule.data).toMatchObject({ cadence: "yearly", month_of_year: 1, day_of_month: 15 });
+
+    const locked = await admin.from("recurring_rules").update({ cadence: "monthly", month_of_year: null }).eq("id", ruleId);
+    expect(locked.error?.message).toMatch(/Učestalost ponavljanja se ne menja/);
+
+    const still = await admin.from("recurring_rules").select("cadence, month_of_year").eq("id", ruleId).single();
+    expect(still.data).toMatchObject({ cadence: "yearly", month_of_year: 1 });
+  });
+
+  it("mesečno sa mesecom i godišnje bez meseca se odbijaju", async () => {
+    const before = await counts(householdId);
+    const monthly = await client(member.token).rpc(
+      "create_entry_with_rule",
+      args({ p_cadence: "monthly", p_month_of_year: 1 }),
+    );
+    const yearly = await client(member.token).rpc(
+      "create_entry_with_rule",
+      args({ p_cadence: "yearly", p_month_of_year: null, p_occurred_on: "2027-03-01", p_day_of_month: 1 }),
+    );
+    expect(monthly.error?.message).toMatch(/nema mesec/);
+    expect(yearly.error?.message).toMatch(/traži mesec/);
     expect(await counts(householdId)).toEqual(before);
   });
 

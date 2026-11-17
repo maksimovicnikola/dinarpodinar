@@ -1,6 +1,14 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { limitThresholds, monthKey, summarizeMonth, todayInBelgrade } from "@finance/domain";
-import { dueActions, occurrenceThisMonth } from "./decide";
+import {
+  limitThresholds,
+  monthKey,
+  occurrenceDate,
+  recurrenceInMonth,
+  summarizeMonth,
+  todayInBelgrade,
+  type RecurrenceCadence,
+} from "@finance/domain";
+import { dueActions } from "./decide";
 
 type Admin = SupabaseClient;
 
@@ -73,12 +81,16 @@ export async function sendLimitAlerts(client: Admin, householdId: string, month:
 export async function runDay(now: Date) {
   const client = admin();
   const today = todayInBelgrade(now);
-  const rules = await client.from("recurring_rules").select("id, household_id, kind, amount_minor, category_id, person_id, note, day_of_month, remind_days, active");
+  const rules = await client.from("recurring_rules").select("id, household_id, kind, amount_minor, category_id, person_id, note, day_of_month, month_of_year, cadence, remind_days, active");
   if (rules.error) throw rules.error;
   const households = new Set<string>();
+  const [year, monthNumber] = today.split("-").map(Number);
   for (const rule of rules.data ?? []) {
     households.add(rule.household_id);
-    const occurrence = occurrenceThisMonth(today, rule.day_of_month);
+    const cadence: RecurrenceCadence = rule.cadence === "yearly" ? "yearly" : "monthly";
+    const monthOfYear = rule.month_of_year ?? null;
+    if (!recurrenceInMonth(cadence, monthOfYear, monthNumber)) continue;
+    const occurrence = occurrenceDate(year, monthNumber, rule.day_of_month);
     const month = monthKey(occurrence);
     const existing = await client.from("entries").select("id").eq("recurring_rule_id", rule.id).eq("month_key", month).maybeSingle();
     if (existing.error) throw existing.error;
@@ -91,6 +103,8 @@ export async function runDay(now: Date) {
       active: rule.active,
       reminderSent: Boolean(sent.data),
       entryExists: Boolean(existing.data),
+      cadence,
+      monthOfYear,
     });
     if (actions.includes("insert")) {
       const inserted = await client.from("entries").insert({

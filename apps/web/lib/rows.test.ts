@@ -189,6 +189,8 @@ describe("rows", () => {
         category_id: "c1",
         person_id: "p1",
         note: null,
+        cadence: "yearly",
+        month_of_year: 1,
         day_of_month: 31,
         remind_days: 3,
       }),
@@ -199,6 +201,8 @@ describe("rows", () => {
       categoryId: "c1",
       personId: "p1",
       note: "",
+      cadence: "yearly",
+      monthOfYear: 1,
       dayOfMonth: 31,
       remindDays: 3,
     });

@@ -50,6 +50,7 @@ function state(overrides: Partial<EntryFormState> = {}): EntryFormState {
     occurredOn: "2026-09-30",
     note: "pijaca",
     repeat: false,
+    cadence: "monthly",
     remindDays: "1",
     ...overrides,
   };
@@ -184,6 +185,7 @@ describe("initialEntryState", () => {
     expect(initial.amount).toBe("");
     expect(initial.note).toBe("");
     expect(initial.repeat).toBe(false);
+    expect(initial.cadence).toBe("monthly");
     expect(initial.remindDays).toBe("1");
     expect(initial.occurredOn).toBe("2026-09-30");
   });
@@ -372,7 +374,7 @@ describe("validateEntry", () => {
       state({ occurredOn: "2026-09-05", repeat: true, remindDays: "3" }),
       context(),
     );
-    expect(checked.ok && checked.draft.repeat).toEqual({ dayOfMonth: 5, remindDays: 3 });
+    expect(checked.ok && checked.draft.repeat).toEqual({ cadence: "monthly", monthOfYear: null, dayOfMonth: 5, remindDays: 3 });
   });
 
   it("ponavljanje 31. ostaje 31 — kraći mesec rešava domen, ne forma", () => {
@@ -381,6 +383,27 @@ describe("validateEntry", () => {
       context(),
     );
     expect(checked.ok && checked.draft.repeat?.dayOfMonth).toBe(31);
+  });
+
+  it("podrazumevano ponavljanje je mesečno, godišnje uzima mesec iz datuma", () => {
+    const monthly = validateEntry(state({ occurredOn: "2026-01-15", repeat: true }), context());
+    expect(monthly.ok && monthly.draft.repeat).toEqual({
+      cadence: "monthly",
+      monthOfYear: null,
+      dayOfMonth: 15,
+      remindDays: 1,
+    });
+
+    const yearly = validateEntry(
+      state({ occurredOn: "2026-01-15", repeat: true, cadence: "yearly", remindDays: "2" }),
+      context(),
+    );
+    expect(yearly.ok && yearly.draft.repeat).toEqual({
+      cadence: "yearly",
+      monthOfYear: 1,
+      dayOfMonth: 15,
+      remindDays: 2,
+    });
   });
 
   it("podsetnik prolazi kroz assertRemindDays", () => {
@@ -471,13 +494,13 @@ describe("saveEntry", () => {
 
   it("unos sa ponavljanjem ide kroz atomičnu RPC, nikad kroz dva upisa", async () => {
     const api = gateway();
-    const repeating = draft({ repeat: { dayOfMonth: 5, remindDays: 3 } });
+    const repeating = draft({ repeat: { cadence: "monthly", monthOfYear: null, dayOfMonth: 5, remindDays: 3 } });
     await expect(saveEntry(repeating, factory(api), REQUEST_ID)).resolves.toEqual({ ok: true });
     expect(api.createWithRule).toHaveBeenCalledTimes(1);
     expect(api.insertEntry).not.toHaveBeenCalled();
 
     const call = (api.createWithRule as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect((call?.[0] as RepeatingDraft).repeat).toEqual({ dayOfMonth: 5, remindDays: 3 });
+    expect((call?.[0] as RepeatingDraft).repeat).toEqual({ cadence: "monthly", monthOfYear: null, dayOfMonth: 5, remindDays: 3 });
     expect(call?.[1]).toBe(REQUEST_ID);
   });
 
@@ -511,7 +534,7 @@ describe("saveEntry", () => {
       }),
     });
     const result = await saveEntry(
-      draft({ repeat: { dayOfMonth: 1, remindDays: 1 } }),
+      draft({ repeat: { cadence: "monthly", monthOfYear: null, dayOfMonth: 1, remindDays: 1 } }),
       factory(api),
       REQUEST_ID,
     );
@@ -520,7 +543,7 @@ describe("saveEntry", () => {
   });
 
   it("nacrt ostaje netaknut i posle pada — polja forme se ne gube", async () => {
-    const original = draft({ repeat: { dayOfMonth: 9, remindDays: 2 }, note: "struja" });
+    const original = draft({ repeat: { cadence: "monthly", monthOfYear: null, dayOfMonth: 9, remindDays: 2 }, note: "struja" });
     const copy = structuredClone(original);
     const api = gateway({
       createWithRule: vi.fn(async () => {
@@ -551,7 +574,7 @@ describe("saveEntry", () => {
       throw new Error("nema okoline");
     };
 
-    const result = await saveEntry(draft({ repeat: { dayOfMonth: 3, remindDays: 1 } }), broken, REQUEST_ID);
+    const result = await saveEntry(draft({ repeat: { cadence: "monthly", monthOfYear: null, dayOfMonth: 3, remindDays: 1 } }), broken, REQUEST_ID);
     expect(phaseAfter("sending", result)).toBe("idle");
     expect(canSend(phaseAfter("sending", result))).toBe(true);
   });
@@ -593,7 +616,7 @@ describe("ticketFor", () => {
       { occurredOn: "2026-09-29" },
       { note: "drugo" },
       { kind: "income" },
-      { repeat: { dayOfMonth: 30, remindDays: 1 } },
+      { repeat: { cadence: "monthly", monthOfYear: null, dayOfMonth: 30, remindDays: 1 } },
     ];
 
     for (const patch of changed) {
@@ -604,8 +627,8 @@ describe("ticketFor", () => {
 
   it("promena podsetnika daje nov identifikator", () => {
     counter = 0;
-    const base = ticketFor(draft({ repeat: { dayOfMonth: 5, remindDays: 1 } }), null, nextId);
-    const next = ticketFor(draft({ repeat: { dayOfMonth: 5, remindDays: 4 } }), base, nextId);
+    const base = ticketFor(draft({ repeat: { cadence: "monthly", monthOfYear: null, dayOfMonth: 5, remindDays: 1 } }), null, nextId);
+    const next = ticketFor(draft({ repeat: { cadence: "monthly", monthOfYear: null, dayOfMonth: 5, remindDays: 4 } }), base, nextId);
     expect(next.requestId).not.toBe(base.requestId);
   });
 
@@ -636,7 +659,8 @@ describe("ticketFor", () => {
       { personId: "y" },
       { occurredOn: "2026-01-01" },
       { note: "z" },
-      { repeat: { dayOfMonth: 1, remindDays: 1 } },
+      { repeat: { cadence: "monthly", monthOfYear: null, dayOfMonth: 1, remindDays: 1 } },
+      { repeat: { cadence: "yearly", monthOfYear: 1, dayOfMonth: 15, remindDays: 1 } },
     ];
 
     for (const patch of fields) {
@@ -646,8 +670,8 @@ describe("ticketFor", () => {
 
   it("isti nacrt uvek daje isti ključ", () => {
     expect(draftKey(draft())).toBe(draftKey(draft()));
-    expect(draftKey(draft({ repeat: { dayOfMonth: 5, remindDays: 2 } }))).toBe(
-      draftKey(draft({ repeat: { dayOfMonth: 5, remindDays: 2 } })),
+    expect(draftKey(draft({ repeat: { cadence: "monthly", monthOfYear: null, dayOfMonth: 5, remindDays: 2 } }))).toBe(
+      draftKey(draft({ repeat: { cadence: "monthly", monthOfYear: null, dayOfMonth: 5, remindDays: 2 } })),
     );
   });
 });

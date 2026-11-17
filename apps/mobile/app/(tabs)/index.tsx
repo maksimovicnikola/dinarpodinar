@@ -3,6 +3,7 @@ import {
   limitState,
   monthKey,
   occurrenceDate,
+  recurrenceInMonth,
   suggest,
   summarizeMonth,
   todayInBelgrade,
@@ -71,7 +72,7 @@ export default function OverviewScreen() {
         .in("month_key", earlier === null ? [month] : [month, earlier]),
       supabase
         .from("recurring_rules")
-        .select("id, category_id, person_id, amount_minor, day_of_month")
+        .select("id, category_id, person_id, amount_minor, cadence, month_of_year, day_of_month")
         .eq("household_id", household.householdId)
         .eq("active", true),
     ]);
@@ -107,6 +108,7 @@ export default function OverviewScreen() {
     const settled = new Set(scoped.filter((entry) => monthKey(entry.occurredOn) === month).map((entry) => entry.ruleId));
     const names = new Map(household.categories.map((category) => [category.id, category.name]));
     const due = (rules.data ?? [])
+      .filter((rule) => recurrenceInMonth(rule.cadence === "yearly" ? "yearly" : "monthly", rule.month_of_year, monthNumber))
       .filter((rule) => !person || rule.person_id === person.id)
       .map((rule) => {
         const dueOn = occurrenceDate(year, monthNumber, rule.day_of_month);

@@ -66,3 +66,59 @@ export function assertRemindDays(days: number): void {
     throw new Error("Podsetnik je od 1 do 7 dana.");
   }
 }
+
+export type RecurrenceCadence = "monthly" | "yearly";
+
+export const MONTH_GENITIVE = [
+  "januara",
+  "februara",
+  "marta",
+  "aprila",
+  "maja",
+  "juna",
+  "jula",
+  "avgusta",
+  "septembra",
+  "oktobra",
+  "novembra",
+  "decembra",
+] as const;
+
+/** Mesečno pravilo važi svakog meseca. Godišnje samo u svom mesecu (1–12). */
+export function recurrenceInMonth(
+  cadence: RecurrenceCadence,
+  monthOfYear: number | null,
+  month: number,
+): boolean {
+  if (cadence === "yearly") return monthOfYear === month;
+  return true;
+}
+
+/**
+ * Rečenica ispod prekidača ponavljanja. `null` kad datum nije YYYY-MM-DD.
+ * 29. februar u neprestupnoj godini pada na 28, isto kao kraći mesec kod mesečnog.
+ */
+export function repeatSchedule(isoDate: string, cadence: RecurrenceCadence): string | null {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.exec(isoDate);
+  if (match == null) return null;
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (cadence === "yearly") {
+    const leap = month === 2 && day === 29 ? " U neprestupnoj godini to je 28. februar." : "";
+    return `Ponavljaće se ${day}. ${MONTH_GENITIVE[month - 1]} svake godine.${leap}`;
+  }
+  return `Ponavljaće se ${day}. u mesecu; u kraćem mesecu poslednjeg dana.`;
+}
+
+/** Natpis učestalosti u podešavanjima. Učestalost i mesec se tu ne menjaju. */
+export function recurrenceSummary(input: {
+  cadence: RecurrenceCadence;
+  dayOfMonth: number;
+  monthOfYear: number | null;
+}): string {
+  if (input.cadence === "yearly" && input.monthOfYear != null) {
+    const name = MONTH_GENITIVE[input.monthOfYear - 1] ?? "meseca";
+    return `Svake godine, ${input.dayOfMonth}. ${name}. Učestalost se ne menja.`;
+  }
+  return `Svakog meseca, ${input.dayOfMonth}. Učestalost se ne menja.`;
+}

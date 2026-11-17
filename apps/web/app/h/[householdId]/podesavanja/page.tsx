@@ -1,3 +1,4 @@
+import { recurrenceSummary } from "@finance/domain";
 import { redirect } from "next/navigation";
 
 import { Passbook, PassbookHeader, Ruler } from "@/components/passbook";
@@ -148,7 +149,7 @@ export default async function SettingsPage({
       .eq("household_id", householdId),
     supabase
       .from("recurring_rules")
-      .select("id, kind, amount_minor, category_id, person_id, note, day_of_month, remind_days, active")
+      .select("id, kind, amount_minor, category_id, person_id, note, cadence, month_of_year, day_of_month, remind_days, active")
       .eq("household_id", householdId),
     supabase
       .from("invitations")
@@ -424,7 +425,7 @@ export default async function SettingsPage({
         <Ruler />
 
         {ruleRows.length === 0 ? (
-          <p className="fine">Nijedno ponavljanje. Pravi se uz nov unos, čekiranjem mesečnog ponavljanja.</p>
+          <p className="fine">Nijedno ponavljanje. Pravi se uz nov unos, uključivanjem ponavljanja.</p>
         ) : (
           <ul className="list stack stack--loose">
             {ruleRows.map((rule) => {
@@ -453,6 +454,12 @@ export default async function SettingsPage({
                       <>
                         {person?.name ?? "Bivši član"}
                         {rule.note ? ` · ${rule.note}` : ""}
+                        {" · "}
+                        {recurrenceSummary({
+                          cadence: rule.cadence === "yearly" ? "yearly" : "monthly",
+                          dayOfMonth: rule.day_of_month,
+                          monthOfYear: rule.month_of_year,
+                        })}
                       </>
                     }
                   />

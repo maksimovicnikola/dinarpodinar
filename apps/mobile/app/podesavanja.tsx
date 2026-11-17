@@ -1,4 +1,4 @@
-import { formatMoney } from "@finance/domain";
+import { formatMoney, recurrenceSummary, type RecurrenceCadence } from "@finance/domain";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Share, StyleSheet, Switch, Text, View } from "react-native";
@@ -36,8 +36,6 @@ import {
 import { supabase } from "../lib/supabase";
 import { colors, space, type } from "../lib/theme";
 
-type Member = { id: string; name: string; owner: boolean };
-type Invite = { id: string; email: string; token: string; expiresAt: string };
 type Rule = {
   id: string;
   kind: "expense" | "income";
@@ -45,10 +43,14 @@ type Rule = {
   categoryId: string;
   personId: string;
   note: string;
+  cadence: RecurrenceCadence;
+  monthOfYear: number | null;
   day: number;
   remind: number;
   active: boolean;
 };
+type Member = { id: string; name: string; owner: boolean };
+type Invite = { id: string; email: string; token: string; expiresAt: string };
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -89,7 +91,7 @@ export default function SettingsScreen() {
         .gt("expires_at", new Date().toISOString()),
       supabase
         .from("recurring_rules")
-        .select("id, kind, amount_minor, category_id, person_id, note, day_of_month, remind_days, active")
+        .select("id, kind, amount_minor, category_id, person_id, note, cadence, month_of_year, day_of_month, remind_days, active")
         .eq("household_id", result.household.householdId),
     ]);
     if (memberRows.error || invitationRows.error || ruleRows.error) {
@@ -119,6 +121,8 @@ export default function SettingsScreen() {
         categoryId: row.category_id as string,
         personId: row.person_id as string,
         note: (row.note as string | null) ?? "",
+        cadence: row.cadence === "yearly" ? "yearly" : "monthly",
+        monthOfYear: typeof row.month_of_year === "number" ? row.month_of_year : null,
         day: row.day_of_month as number,
         remind: row.remind_days as number,
         active: row.active as boolean,
@@ -318,7 +322,7 @@ export default function SettingsScreen() {
             {rules.length === 0 ? <Muted>Nijedno ponavljanje.</Muted> : null}
             {rules.map((rule) => (
               <RuleEditor
-                key={`${rule.id}:${rule.amountMinor}:${rule.day}:${rule.remind}:${rule.active}`}
+                key={`${rule.id}:${rule.amountMinor}:${rule.day}:${rule.remind}:${rule.active}:${rule.cadence}:${rule.monthOfYear ?? ""}`}
                 rule={rule}
                 title={names.get(rule.categoryId) ?? "Kategorija"}
                 person={people.get(rule.personId) ?? "Bivši član"}
@@ -473,6 +477,13 @@ function RuleEditor({
             {rule.active ? null : <Tag>ugašeno</Tag>}
           </View>
           <Muted>{`${person}${rule.note ? ` · ${rule.note}` : ""} · ${formatMoney(rule.amountMinor, currency)}`}</Muted>
+          <Muted>
+            {recurrenceSummary({
+              cadence: rule.cadence,
+              dayOfMonth: rule.day,
+              monthOfYear: rule.monthOfYear,
+            })}
+          </Muted>
         </View>
         <Button quiet onPress={() => setOpen(!open)}>
           {open ? "Zatvori" : "Izmeni"}

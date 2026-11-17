@@ -3,6 +3,7 @@ import {
   type CategorySnapshot,
   type EntryKind,
   type EntrySnapshot,
+  type RecurrenceCadence,
 } from "@finance/domain";
 
 /** Kategorija sa zastavicom arhive: istorija je i dalje prikazuje, nov unos ne. */
@@ -19,6 +20,8 @@ export type RecurringSnapshot = {
   categoryId: string;
   personId: string;
   note: string;
+  cadence: RecurrenceCadence;
+  monthOfYear: number | null;
   dayOfMonth: number;
   remindDays: number;
 };
@@ -87,6 +90,8 @@ export function toRecurringSnapshot(row: {
   category_id: string;
   person_id: string;
   note: string | null;
+  cadence: "monthly" | "yearly";
+  month_of_year: number | null;
   day_of_month: number;
   remind_days: number;
 }): RecurringSnapshot {
@@ -97,6 +102,8 @@ export function toRecurringSnapshot(row: {
     categoryId: row.category_id,
     personId: row.person_id,
     note: row.note ?? "",
+    cadence: row.cadence === "yearly" ? "yearly" : "monthly",
+    monthOfYear: row.month_of_year,
     dayOfMonth: row.day_of_month,
     remindDays: row.remind_days,
   };

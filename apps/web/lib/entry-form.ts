@@ -24,6 +24,8 @@ export type CategoryOption = { id: string; name: string; kind: EntryKind };
 
 export type PersonOption = { id: string; name: string };
 
+export type RepeatCadence = "monthly" | "yearly";
+
 export type EntryFormState = {
   kind: EntryKind;
   amount: string;
@@ -32,6 +34,8 @@ export type EntryFormState = {
   occurredOn: string;
   note: string;
   repeat: boolean;
+  /** Podrazumevano mesečno. Godišnje samo kad se izabere. */
+  cadence: RepeatCadence;
   remindDays: string;
 };
 
@@ -128,6 +132,7 @@ export function initialEntryState(input: {
     occurredOn: input.today,
     note: "",
     repeat: false,
+    cadence: "monthly",
     remindDays: DEFAULT_REMIND_DAYS,
   };
 }
@@ -177,7 +182,12 @@ export function isCalendarDate(value: string): boolean {
   return Number(match[3]) <= clampDayOfMonth(year, Number(match[2]), 31);
 }
 
-export type RepeatRule = { dayOfMonth: number; remindDays: number };
+export type RepeatRule = {
+  cadence: RepeatCadence;
+  monthOfYear: number | null;
+  dayOfMonth: number;
+  remindDays: number;
+};
 
 export type EntryDraft = {
   householdId: string;
@@ -266,8 +276,13 @@ export function validateEntry(
     return { ok: false, message: "Podsetnik je od 1 do 7 dana." };
   }
 
+  if (state.cadence !== "monthly" && state.cadence !== "yearly") {
+    return { ok: false, message: "Ponavljanje je mesečno ili godišnje." };
+  }
+
   const remindDays = Number(remindText);
   const dayOfMonth = Number(state.occurredOn.slice(8, 10));
+  const monthOfYear = state.cadence === "yearly" ? Number(state.occurredOn.slice(5, 7)) : null;
   try {
     assertRemindDays(remindDays);
     assertDayOfMonth(dayOfMonth);
@@ -285,7 +300,7 @@ export function validateEntry(
       personId: state.personId,
       occurredOn: state.occurredOn,
       note,
-      repeat: { dayOfMonth, remindDays },
+      repeat: { cadence: state.cadence, monthOfYear, dayOfMonth, remindDays },
     },
   };
 }
@@ -423,6 +438,8 @@ export function draftKey(draft: EntryDraft): string {
     draft.personId,
     draft.occurredOn,
     draft.note,
+    draft.repeat?.cadence ?? null,
+    draft.repeat?.monthOfYear ?? null,
     draft.repeat?.dayOfMonth ?? null,
     draft.repeat?.remindDays ?? null,
   ]);

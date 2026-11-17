@@ -113,7 +113,7 @@ describe("skup migracija", () => {
 });
 
 /** Potpis koji aplikacija zaista zove — sa identifikatorom zahteva na kraju. */
-const RPC_SIGNATURE = String.raw`public\.create_entry_with_rule\(uuid, text, bigint, uuid, uuid, date, text, integer, integer, uuid\)`;
+const RPC_SIGNATURE = String.raw`public\.create_entry_with_rule\(uuid, text, bigint, uuid, uuid, date, text, integer, integer, uuid, text, integer\)`;
 
 /** Poslednja (važeća) definicija funkcije, ne ona koju je kasnija migracija zamenila. */
 function lastRpcBody(): string {
@@ -168,6 +168,12 @@ describe("atomičan unos sa ponavljanjem", () => {
   it("stari potpis bez identifikatora zahteva je uklonjen", () => {
     expect(sql).toMatch(
       /drop function if exists public\.create_entry_with_rule\(\s*uuid, text, bigint, uuid, uuid, date, text, integer, integer\s*\)/,
+    );
+  });
+
+  it("potpis bez učestalosti je uklonjen, da PostgREST ne bira između dve funkcije", () => {
+    expect(sql).toMatch(
+      /drop function if exists public\.create_entry_with_rule\(\s*uuid, text, bigint, uuid, uuid, date, text, integer, integer, uuid\s*\)/,
     );
   });
 

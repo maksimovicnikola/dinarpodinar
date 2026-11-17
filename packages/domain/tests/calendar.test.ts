@@ -6,6 +6,9 @@ import {
   clampDayOfMonth,
   monthKey,
   occurrenceDate,
+  recurrenceInMonth,
+  recurrenceSummary,
+  repeatSchedule,
   todayInBelgrade,
 } from "../src/calendar";
 
@@ -61,6 +64,33 @@ describe("calendar", () => {
     expect(() => assertDayOfMonth(32)).toThrow(/1 do 31/);
     expect(() => assertDayOfMonth(1.5)).toThrow(/1 do 31/);
     expect(() => assertDayOfMonth(31)).not.toThrow();
+  });
+
+  it("mesečno pravilo važi u svakom mesecu, godišnje samo u svom", () => {
+    expect(recurrenceInMonth("monthly", null, 6)).toBe(true);
+    expect(recurrenceInMonth("yearly", 1, 1)).toBe(true);
+    expect(recurrenceInMonth("yearly", 1, 6)).toBe(false);
+    expect(recurrenceInMonth("yearly", null, 1)).toBe(false);
+  });
+
+  it("raspored godišnjeg pravila uzima mesec i dan, a 29. februar kaže 28", () => {
+    expect(repeatSchedule("2026-01-15", "monthly")).toBe(
+      "Ponavljaće se 15. u mesecu; u kraćem mesecu poslednjeg dana.",
+    );
+    expect(repeatSchedule("2026-01-15", "yearly")).toBe("Ponavljaće se 15. januara svake godine.");
+    expect(repeatSchedule("2024-02-29", "yearly")).toBe(
+      "Ponavljaće se 29. februara svake godine. U neprestupnoj godini to je 28. februar.",
+    );
+    expect(repeatSchedule("nije-datum", "yearly")).toBeNull();
+  });
+
+  it("natpis u podešavanjima ne nudi promenu učestalosti", () => {
+    expect(recurrenceSummary({ cadence: "monthly", dayOfMonth: 15, monthOfYear: null })).toBe(
+      "Svakog meseca, 15. Učestalost se ne menja.",
+    );
+    expect(recurrenceSummary({ cadence: "yearly", dayOfMonth: 15, monthOfYear: 1 })).toBe(
+      "Svake godine, 15. januara. Učestalost se ne menja.",
+    );
   });
 
   it("occurrenceDate odbija nevažeći mesec", () => {

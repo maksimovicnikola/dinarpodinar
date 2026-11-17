@@ -1,4 +1,4 @@
-import { addCalendarDays, assertRemindDays, todayInBelgrade } from "@finance/domain";
+import { addCalendarDays, assertRemindDays, repeatSchedule, todayInBelgrade, type RecurrenceCadence } from "@finance/domain";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
@@ -32,6 +32,7 @@ export default function NewEntryScreen() {
   const pickerReadyAt = useRef(0);
   const [note, setNote] = useState("");
   const [repeat, setRepeat] = useState(false);
+  const [cadence, setCadence] = useState<RecurrenceCadence>("monthly");
   const [remindDays, setRemindDays] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -107,6 +108,8 @@ export default function NewEntryScreen() {
           p_note: note,
           p_day_of_month: Number(occurredOn.slice(8, 10)),
           p_remind_days: remindDays,
+          p_cadence: cadence,
+          p_month_of_year: cadence === "yearly" ? Number(occurredOn.slice(5, 7)) : null,
           p_request_id: newRequestId(),
         });
         if (created.error) throw created.error;
@@ -231,11 +234,26 @@ export default function NewEntryScreen() {
         <View style={styles.repeat}>
           <View style={styles.repeatRow}>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.repeatTitle}>Ponavljaj svakog meseca</Text>
-              <Muted>{`Svakog ${Number(occurredOn.slice(8, 10)) || "—"}. u mesecu`}</Muted>
+              <Text style={styles.repeatTitle}>Ponavljanje</Text>
+              <Muted>{repeatSchedule(occurredOn, cadence) ?? "Datum određuje dan ponavljanja."}</Muted>
             </View>
-            <Switch value={repeat} onValueChange={setRepeat} trackColor={{ true: colors.accent }} />
+            <Switch
+              value={repeat}
+              onValueChange={(value) => {
+                setRepeat(value);
+                if (!value) setCadence("monthly");
+              }}
+              trackColor={{ true: colors.accent }}
+            />
           </View>
+          {repeat ? (
+            <View style={[styles.repeatRow, styles.repeatLine]}>
+              <Chips>
+                <Chip on={cadence === "monthly"} onPress={() => setCadence("monthly")}>Mesečno</Chip>
+                <Chip on={cadence === "yearly"} onPress={() => setCadence("yearly")}>Godišnje</Chip>
+              </Chips>
+            </View>
+          ) : null}
           {repeat ? (
             <View style={[styles.repeatRow, styles.repeatLine]}>
               <Text style={[styles.repeatTitle, { flex: 1 }]}>Podseti me ranije</Text>

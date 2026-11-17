@@ -1,5 +1,6 @@
 "use client";
 
+import { repeatSchedule } from "@finance/domain";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type FormEvent } from "react";
 
@@ -12,7 +13,6 @@ import {
   entryBlocker,
   entryErrorMessage,
   initialEntryState,
-  isCalendarDate,
   phaseAfter,
   saveEntry,
   saveLabel,
@@ -66,6 +66,8 @@ function browserGateway(): EntryGateway {
         p_note: draft.note,
         p_day_of_month: draft.repeat.dayOfMonth,
         p_remind_days: draft.repeat.remindDays,
+        p_cadence: draft.repeat.cadence,
+        p_month_of_year: draft.repeat.monthOfYear,
         p_request_id: requestId,
       });
     },
@@ -104,7 +106,7 @@ export function EntryForm({
     [categories, state.kind],
   );
   const blocker = entryBlocker({ categories, people, kind: state.kind });
-  const repeatDay = isCalendarDate(state.occurredOn) ? Number(state.occurredOn.slice(8, 10)) : null;
+  const schedule = repeatSchedule(state.occurredOn, state.cadence);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -275,25 +277,45 @@ export function EntryForm({
             type="checkbox"
             checked={state.repeat}
             onChange={(event) =>
-              setState((current) => ({ ...current, repeat: event.target.checked }))
+              setState((current) => ({
+                ...current,
+                repeat: event.target.checked,
+                cadence: event.target.checked ? current.cadence : "monthly",
+              }))
             }
             aria-describedby="ponavljanje-hint"
           />
           <span className="check__text">
             <label className="check__label" htmlFor="ponavljanje">
-              Mesečno ponavljanje
+              Ponavljanje
             </label>
             <span className="field__hint" id="ponavljanje-hint">
-              {repeatDay === null
-                ? "Pravilo uzima dan iz datuma iznad."
-                : `Ponavljaće se ${repeatDay}. u mesecu; u kraćem mesecu poslednjeg dana.`}
+              {schedule ?? "Pravilo uzima dan iz datuma iznad."}
             </span>
           </span>
         </div>
 
         {state.repeat ? (
           <fieldset className="group">
-            <legend className="group__legend">Podsetnik</legend>
+            <legend className="group__legend">Ponavljanje</legend>
+            <Field id="ucesstalost" label="Učestalost" hint="Podrazumevano je mesečno.">
+              <select
+                id="ucesstalost"
+                className="input"
+                name="ucesstalost"
+                value={state.cadence}
+                onChange={(event) =>
+                  setState((current) => ({
+                    ...current,
+                    cadence: event.target.value === "yearly" ? "yearly" : "monthly",
+                  }))
+                }
+                aria-describedby="ucesstalost-hint"
+              >
+                <option value="monthly">Mesečno</option>
+                <option value="yearly">Godišnje</option>
+              </select>
+            </Field>
             <Field id="podsetnik" label="Dana ranije" hint="Ceo broj od 1 do 7.">
               <input
                 id="podsetnik"

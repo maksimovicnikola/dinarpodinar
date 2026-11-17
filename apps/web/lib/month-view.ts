@@ -13,6 +13,7 @@ import {
   limitState,
   limitThresholds,
   occurrenceDate,
+  recurrenceInMonth,
   type LimitState,
   suggest,
   summarizeMonth,
@@ -345,8 +346,9 @@ const STATE_LABELS: Record<UpcomingState, string> = {
  * Dospeća aktivnih pravila u vidljivom mesecu, sa danom podsetnika.
  *
  * Dan 31 u mesecu koji ga nema postaje poslednji dan tog meseca — to radi
- * `occurrenceDate`, ista funkcija koju koristi i mesečni posao, pa pregled i
- * posao ne mogu da se raziđu. Podsetnik sme da padne u prethodni mesec.
+ * `occurrenceDate`, ista funkcija koju koristi i dnevni posao, pa pregled i
+ * posao ne mogu da se raziđu. Godišnje pravilo se vidi samo u svom mesecu.
+ * Podsetnik sme da padne u prethodni mesec.
  */
 export function buildUpcoming(input: {
   currency: string;
@@ -369,6 +371,7 @@ export function buildUpcoming(input: {
   const personId = input.personId?.trim();
 
   return input.rules
+    .filter((rule) => recurrenceInMonth(rule.cadence, rule.monthOfYear, monthNumber))
     .filter((rule) => !personId || rule.personId === personId)
     .map((rule) => {
       const dueOn = occurrenceDate(year, monthNumber, rule.dayOfMonth);

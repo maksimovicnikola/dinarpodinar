@@ -54,6 +54,8 @@ function rule(overrides: Partial<RecurringSnapshot> & { id: string }): Recurring
     categoryId: "food",
     personId: "m",
     note: "",
+    cadence: "monthly",
+    monthOfYear: null,
     dayOfMonth: 15,
     remindDays: 1,
     ...overrides,
@@ -779,6 +781,31 @@ describe("buildUpcoming", () => {
 
     expect(row?.dueOn).toBe("2026-02-28");
     expect(row?.dueDate).toBe("28.2.2026.");
+  });
+
+  it("godišnje pravilo se vidi samo u svom mesecu, a 29. februar postaje 28", () => {
+    const yearly = rule({ id: "godina", cadence: "yearly", monthOfYear: 1, dayOfMonth: 15 });
+    const hidden = buildUpcoming({
+      ...base,
+      month: "2026-06",
+      rules: [yearly],
+    });
+    const [shown] = buildUpcoming({
+      ...base,
+      today: "2026-01-10",
+      month: "2026-01",
+      rules: [yearly],
+    });
+    const [leap] = buildUpcoming({
+      ...base,
+      today: "2027-02-01",
+      month: "2027-02",
+      rules: [rule({ id: "feb", cadence: "yearly", monthOfYear: 2, dayOfMonth: 29 })],
+    });
+
+    expect(hidden).toEqual([]);
+    expect(shown?.dueOn).toBe("2026-01-15");
+    expect(leap?.dueOn).toBe("2027-02-28");
   });
 
   it("dan 31 u prestupnom februaru postaje 29.", () => {

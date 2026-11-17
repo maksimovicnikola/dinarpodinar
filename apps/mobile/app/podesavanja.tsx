@@ -1,7 +1,7 @@
 import { formatMoney, recurrenceSummary, type RecurrenceCadence } from "@finance/domain";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Share, StyleSheet, Switch, Text, View } from "react-native";
+import { Modal, Pressable, Share, StyleSheet, Switch, Text, View } from "react-native";
 
 import { SignOutButton } from "../components/sign-out";
 import {
@@ -35,7 +35,7 @@ import {
   type Outcome,
 } from "../lib/manage";
 import { supabase } from "../lib/supabase";
-import { colors, space, type } from "../lib/theme";
+import { colors, radius, space, type } from "../lib/theme";
 
 type Rule = {
   id: string;
@@ -467,7 +467,7 @@ function RuleEditor({
   const [day, setDay] = useState(rule.day);
   const [remind, setRemind] = useState(rule.remind);
   const [active, setActive] = useState(rule.active);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [askDelete, setAskDelete] = useState(false);
 
   return (
     <View style={styles.block}>
@@ -516,18 +516,30 @@ function RuleEditor({
           >
             Sačuvaj ponavljanje
           </Button>
-          <View style={styles.row}>
-            <Text style={styles.name}>Obriši ponavljanje</Text>
-            <Switch value={confirmDelete} onValueChange={setConfirmDelete} trackColor={{ true: colors.over }} />
-          </View>
-          <Muted>Buduća dospeća nestaju. Već uneti iznosi ostaju u istoriji.</Muted>
-          <Button
-            quiet
-            disabled={busy || !confirmDelete}
-            onPress={() => void onRun(() => deleteRule(householdId, rule.id))}
-          >
+          <Button quiet disabled={busy} onPress={() => setAskDelete(true)}>
             Obriši ponavljanje
           </Button>
+          <Modal visible={askDelete} transparent animationType="fade" onRequestClose={() => setAskDelete(false)}>
+            <View style={styles.backdrop}>
+              <Pressable accessibilityLabel="Odustani" style={StyleSheet.absoluteFill} onPress={() => setAskDelete(false)} />
+              <View style={styles.dialog}>
+                <Text style={styles.dialogTitle}>Da li želiš da obrišeš ovo ponavljanje?</Text>
+                <Muted>Buduća dospeća nestaju. Već uneti iznosi ostaju u istoriji.</Muted>
+                <Button quiet disabled={busy} onPress={() => setAskDelete(false)}>
+                  Odustani
+                </Button>
+                <Button
+                  disabled={busy}
+                  onPress={() => {
+                    setAskDelete(false);
+                    void onRun(() => deleteRule(householdId, rule.id));
+                  }}
+                >
+                  Obriši
+                </Button>
+              </View>
+            </View>
+          </Modal>
         </>
       ) : null}
     </View>
@@ -583,6 +595,19 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm },
   rowText: { flex: 1, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
   name: { ...type.body, fontWeight: "500", color: colors.text },
+  backdrop: {
+    flex: 1,
+    justifyContent: "center",
+    padding: space.lg,
+    backgroundColor: "rgba(20, 23, 28, 0.4)",
+  },
+  dialog: {
+    gap: space.md,
+    padding: space.lg,
+    borderRadius: radius.card,
+    backgroundColor: colors.surface,
+  },
+  dialogTitle: { ...type.title, color: colors.text },
   block: {
     gap: space.sm,
     paddingTop: space.sm,

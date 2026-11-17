@@ -13,7 +13,7 @@
  * zahtev još jednom.
  */
 
-import { useActionState, useEffect, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Field, Notice } from "@/components/form";
 import { SubmitButton } from "@/components/submit-button";
@@ -521,42 +521,38 @@ export function DeleteRuleForm({
   householdId: string;
   ruleId: string;
 }) {
+  const dialog = useRef<HTMLDialogElement>(null);
   const [state, action] = useActionState(deleteRuleAction, emptySettings);
-  const [confirmed, setConfirmed] = useState(false);
+
+  useEffect(() => {
+    if (state.message !== null && !state.ok && dialog.current && !dialog.current.open) {
+      dialog.current.showModal();
+    }
+  }, [state]);
 
   return (
-    <form className="stack stack--tight" action={action}>
+    <form action={action}>
       <HouseholdField householdId={householdId} />
       <input type="hidden" name="pravilo" value={ruleId} />
+      <input type="hidden" name="potvrda" value="da" />
 
-      <div className="check">
-        <input
-          id={`brisi-pravilo-${ruleId}`}
-          className="check__box"
-          name="potvrda"
-          type="checkbox"
-          value="da"
-          checked={confirmed}
-          onChange={(event) => setConfirmed(event.target.checked)}
-          aria-describedby={`brisi-pravilo-${ruleId}-hint`}
-        />
-        <span className="check__text">
-          <label className="check__label" htmlFor={`brisi-pravilo-${ruleId}`}>
-            Razumem da se ponavljanje briše
-          </label>
-          <span className="field__hint" id={`brisi-pravilo-${ruleId}-hint`}>
-            Buduća dospeća nestaju. Unosi koji su već potvrđeni ostaju u istoriji.
-          </span>
-        </span>
-      </div>
+      <button type="button" className="button button--quiet" onClick={() => dialog.current?.showModal()}>
+        Obriši ponavljanje
+      </button>
 
-      <Outcome state={state} />
-
-      <div className="row">
-        <SubmitButton quiet pendingLabel="Brišem…" disabled={!confirmed}>
-          Obriši ponavljanje
-        </SubmitButton>
-      </div>
+      <dialog ref={dialog} className="dialog" aria-labelledby={`brisi-pravilo-${ruleId}`}>
+        <h2 id={`brisi-pravilo-${ruleId}`}>Da li želiš da obrišeš ovo ponavljanje?</h2>
+        <p>Buduća dospeća nestaju. Unosi koji su već potvrđeni ostaju u istoriji.</p>
+        <Outcome state={state} />
+        <div className="row">
+          <button type="button" className="button button--quiet" onClick={() => dialog.current?.close()}>
+            Odustani
+          </button>
+          <SubmitButton danger pendingLabel="Brišem…">
+            Obriši
+          </SubmitButton>
+        </div>
+      </dialog>
     </form>
   );
 }

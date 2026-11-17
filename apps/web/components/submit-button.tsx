@@ -14,19 +14,22 @@ export function SubmitButton({
   children,
   pendingLabel,
   quiet = false,
+  danger = false,
   disabled = false,
 }: {
   children: string;
   pendingLabel: string;
   quiet?: boolean;
+  danger?: boolean;
   disabled?: boolean;
 }) {
   const { pending } = useFormStatus();
+  const tone = danger ? "button button--danger" : quiet ? "button button--quiet" : "button";
 
   return (
     <button
       type="submit"
-      className={quiet ? "button button--quiet" : "button"}
+      className={tone}
       disabled={pending || disabled}
     >
       {pending ? pendingLabel : children}
